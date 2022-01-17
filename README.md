@@ -31,8 +31,3 @@ Ant-v1, Humanoid-v1: 50000
 ## Results
 
 More or less similar to the original code. Coming soon.
-
-## Todo
-
-- [ ] Plots.
-- [ ] Collect data in multiple threads.
