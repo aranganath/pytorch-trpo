@@ -10,6 +10,7 @@ from replay_memory import Memory
 from running_state import ZFilter
 from torch.autograd import Variable
 from trpo import trpo_step
+from RL_ARCLSR1 import ARCLSR1
 from utils import *
 
 torch.utils.backcompat.broadcast_warning.enabled = True
@@ -50,6 +51,9 @@ torch.manual_seed(args.seed)
 
 policy_net = Policy(num_inputs, num_actions)
 value_net = Value(num_inputs)
+
+# initialize the optimization method
+optimize = ARCLSR1()
 
 def select_action(state):
     state = torch.from_numpy(state).unsqueeze(0)
@@ -128,7 +132,10 @@ def update_params(batch):
         kl = log_std1 - log_std0 + (std0.pow(2) + (mean0 - mean1).pow(2)) / (2.0 * std1.pow(2)) - 0.5
         return kl.sum(1, keepdim=True)
 
-    trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
+    # trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
+
+    # Call the optimization method here
+    optimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping)
 
 running_state = ZFilter((num_inputs,), clip=5)
 running_reward = ZFilter((1,), demean=False, clip=10)

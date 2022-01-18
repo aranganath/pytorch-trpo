@@ -46,3 +46,8 @@ def get_flat_grad_from(net, grad_grad=False):
 
     flat_grad = torch.cat(grads)
     return flat_grad
+
+def directional_evaluate(closure, model, x, t, d):
+    set_flat_params_to(model, x + t*d)
+    loss = float(closure())
+    return loss
