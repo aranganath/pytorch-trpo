@@ -133,9 +133,11 @@ def update_params(batch):
         return kl.sum(1, keepdim=True)
 
     # trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
+    
 
     # Call the optimization method here
     optimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping)
+    print('Loss:{:.2f}'.format(get_loss()))
 
 running_state = ZFilter((num_inputs,), clip=5)
 running_reward = ZFilter((1,), demean=False, clip=10)
@@ -151,7 +153,7 @@ for i_episode in count(1):
         state = running_state(state)
 
         reward_sum = 0
-        for t in range(10000): # Don't infinite loop while learning
+        for t in range(100000): # Don't infinite loop while learning
             action = select_action(state)
             action = action.data[0].numpy()
             next_state, reward, done, _ = env.step(action)
@@ -171,14 +173,13 @@ for i_episode in count(1):
                 break
 
             state = next_state
-        num_steps += (t-1)
+        num_steps += (t+1)
         num_episodes += 1
         reward_batch += reward_sum
 
     reward_batch /= num_episodes
     batch = memory.sample()
     update_params(batch)
-
     if i_episode % args.log_interval == 0:
-        print('Episode {}\tLast reward: {}\tAverage reward {:.2f}'.format(
+        print('Episode {}\tLast reward: {}\tAverage reward {:.2f} \t '.format(
             i_episode, reward_sum, reward_batch))

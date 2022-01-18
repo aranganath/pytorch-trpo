@@ -15,12 +15,12 @@ class ARCLSR1(object):
         self.prev_flat_grad = []
         self.flat_grad = []
         self.lr = 1e-1
-        self.maxiters = 1
-        self.maxhist = 1
+        self.maxiters = 4
+        self.maxhist = 5
         self.first = True
-        self.mu = 100
-        self.eta1 = 0.05
-        self.eta2 = 0.15
+        self.mu = 1
+        self.eta1 = 0
+        self.eta2 = 0.05
         self.gamma1 = 1
         self.gamma2 = 2
 
@@ -56,7 +56,7 @@ class ARCLSR1(object):
             grads = self.flatten(torch.autograd.grad(loss, model.parameters(), create_graph=True))
             if self.first:
                 t = min(1., 1./grads.abs().sum())*self.lr
-                s = t*grads
+                sstar = t*grads
                 self.prev_flat_grad = grads
                 flag = True
 
@@ -64,42 +64,42 @@ class ARCLSR1(object):
                 # We have one step. let's use it
                 D, g_parallel, C_parallel, U_par, alphastar,sstar, gamma, pflag = self.LSR1(self.S, self.SS, self.YY, self.SY, self.Y, grads, 1)
                 flag = self.cubicReg(D, g_parallel, C_parallel, grads, U_par, alphastar, sstar, gamma, get_loss, model, pflag)
+                
 
+            new_params = get_flat_params_from(model) + 0.5*sstar/torch.norm(sstar)
+            set_flat_params_to(model, new_params)
+            # Update parameters
+            
+            grads = self.flatten(torch.autograd.grad(loss, model.parameters(), create_graph=True))
+            y = grads - self.prev_flat_grad
+            
             if flag:
-                new_params = get_flat_params_from(model) + s
-                set_flat_params_to(model, new_params)
-                # Update parameters
-                
-                grads = self.flatten(torch.autograd.grad(loss, model.parameters(), create_graph=True))
-                y = grads - self.prev_flat_grad
-                
-
                 if self.first:
 
-                    self.S = s.unsqueeze(1)
+                    self.S = sstar.unsqueeze(1)
                     self.Y = y.unsqueeze(1)
-                    self.SS = s.dot(s)[None, None]
-                    self.SY = s.dot(y)[None, None]
+                    self.SS = sstar.dot(sstar)[None, None]
+                    self.SY = sstar.dot(y)[None, None]
                     self.YY = y.dot(y)[None,None]
                     self.first = False
 
                 elif self.S.shape[1]<self.maxhist:
 
-                    self.SY = torch.vstack((torch.hstack((self.SY, self.S.T @ y.unsqueeze(1))), torch.hstack((s.unsqueeze(1).T @ self.Y , s.unsqueeze(1).T @ y.unsqueeze(1)))))
-                    self.SS = torch.vstack((torch.hstack((self.SS, self.S.T @ s.unsqueeze(1))), torch.hstack((s.unsqueeze(1).T @ self.S , s.unsqueeze(1).T @ s.unsqueeze(1)))))
+                    self.SY = torch.vstack((torch.hstack((self.SY, self.S.T @ y.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.Y , sstar.unsqueeze(1).T @ y.unsqueeze(1)))))
+                    self.SS = torch.vstack((torch.hstack((self.SS, self.S.T @ sstar.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.S , sstar.unsqueeze(1).T @ sstar.unsqueeze(1)))))
                     self.YY = torch.vstack((torch.hstack((self.YY, self.Y.T @ y.unsqueeze(1))), torch.hstack((y.unsqueeze(1).T @ self.Y , y.unsqueeze(1).T @ y.unsqueeze(1)))))
-                    self.S = torch.cat([self.S, s.unsqueeze(1)], axis=1)
+                    self.S = torch.cat([self.S, sstar.unsqueeze(1)], axis=1)
                     self.Y = torch.cat([self.Y, y.unsqueeze(1)], axis=1)
 
                 else:
 
-                    self.SY = torch.vstack((torch.hstack((self.SY[1:,1:], self.S[:,1:].T @ y.unsqueeze(1))), torch.hstack((s.unsqueeze(1).T @ self.Y[:,1:] , s.unsqueeze(1).T @ y.unsqueeze(1)))))
-                    self.SS = torch.vstack((torch.hstack((self.SS[1:,1:], self.S[:,1:].T @ s.unsqueeze(1))), torch.hstack((s.unsqueeze(1).T @ self.S[:,1:] , s.unsqueeze(1).T @ s.unsqueeze(1)))))
+                    self.SY = torch.vstack((torch.hstack((self.SY[1:,1:], self.S[:,1:].T @ y.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.Y[:,1:] , sstar.unsqueeze(1).T @ y.unsqueeze(1)))))
+                    self.SS = torch.vstack((torch.hstack((self.SS[1:,1:], self.S[:,1:].T @ sstar.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.S[:,1:] , sstar.unsqueeze(1).T @ sstar.unsqueeze(1)))))
                     self.YY = torch.vstack((torch.hstack((self.YY[1:,1:], self.Y[:,1:].T @ y.unsqueeze(1))), torch.hstack((y.unsqueeze(1).T @ self.Y[:,1:] , y.unsqueeze(1).T @ y.unsqueeze(1)))))
-                    self.S = torch.cat([self.S[:,1:], s.unsqueeze(1)], axis=1)
+                    self.S = torch.cat([self.S[:,1:], sstar.unsqueeze(1)], axis=1)
                     self.Y = torch.cat([self.Y[:,1:], y.unsqueeze(1)], axis=1)
 
-                self.prev_flat_grad = grads
+            self.prev_flat_grad = grads
             
         return loss
 
@@ -134,7 +134,7 @@ class ARCLSR1(object):
         try:
             RMR = R @ torch.inverse(invM) @ R.T
         except RuntimeError:
-            from pdn import set_trace
+            from pdb import set_trace
             set_trace()
 
         RMR = 0.5*(RMR + RMR.T)
@@ -158,7 +158,7 @@ class ARCLSR1(object):
         C_parallel = torch.diag(torch.stack(C_parallel).reshape(-1))
 
 
-        if torch.norm(gperp) < 1e-15:
+        if torch.norm(gperp) < 1e-8:
             #The solution only depends on sstar_parallel
             sstar_parallel = -C_parallel @ g_parallel
             sstar =  U_par @ sstar_parallel
@@ -172,6 +172,7 @@ class ARCLSR1(object):
         alphastar = 2/(gamma + torch.sqrt(gamma**2 + 4*0.1*torch.norm(gperp)))
         sstar = -alphastar * flat_grad + U_par @ (alphastar * torch.eye(S.shape[1]) - C_parallel) @ g_parallel
         if sstar.isnan().any():
+            from pdb import set_trace
             set_trace()
 
         return D, g_parallel, C_parallel, U_par, alphastar, sstar, gamma, True
@@ -192,8 +193,6 @@ class ARCLSR1(object):
         return (f1 - f2)/(-m)
 
 
-
-
     def cubicReg(self, D, g_parallel, C_parallel, g, U_par, alphastar, sstar, gamma, closure, model, pflag):
         rhok = self.lmarquardt(D, g_parallel, C_parallel, g, U_par, alphastar, sstar, gamma, closure, model, pflag)
         
@@ -208,6 +207,6 @@ class ARCLSR1(object):
             self.mu  = 0.5*(self.mu + self.mu*self.gamma1)
         else:
             self.mu = 0.5*(self.gamma1 + self.gamma2)*self.mu
-
+        
         return flag
 
