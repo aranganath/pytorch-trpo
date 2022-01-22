@@ -1,0 +1,14 @@
+cffi==1.15.0
+cloudpickle==2.0.0
+Cython==0.29.26
+fasteners==0.17.2
+glfw==2.5.0
+gym==0.21.0
+imageio==2.14.0
+mujoco-py==2.1.2.14
+numpy==1.22.1
+Pillow==9.0.0
+pycparser==2.21
+scipy==1.7.3
+torch==1.10.1
+typing-extensions==4.0.1
