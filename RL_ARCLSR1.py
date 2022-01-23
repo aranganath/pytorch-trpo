@@ -15,7 +15,7 @@ class ARCLSR1(object):
 		self.SY = None
 		self.prev_flat_grad = []
 		self.flat_grad = []
-		self.lr = 1e-1
+		self.lr = 1e-5
 		
 		self.maxiters = 5
 		self.maxhist = 5
@@ -31,9 +31,9 @@ class ARCLSR1(object):
 		self.k = 0.5
 		self.k_lower_bound = 0.01
 		self.epoch_count = 0
-
+		self.momentum = 0.9
 		self.decay_factor = 0.95
-		self.decay_interval = 5
+
 
 	def flatten(self, value):
 		return torch.cat([val.view(-1) for val in value])
@@ -68,26 +68,30 @@ class ARCLSR1(object):
 				t = min(1., 1./grads.abs().sum())*self.lr
 				sstar = t*grads
 				self.prev_flat_grad = grads
+				self.vk = sstar
 				flag = True
 
 			else:
 				# We have one step. let's use it
-				D, g_parallel, C_parallel, U_par, alphastar,sstar, gamma, pflag = self.LSR1(self.S, self.SS, self.YY, self.SY, self.Y, grads, 1)
+				D, g_parallel, C_parallel, U_par, alphastar, sstar, gamma, pflag = self.LSR1(self.S, self.SS, self.YY, self.SY, self.Y, grads, 1)
+				self.vk = self.momentum*min(1.0, self.k/torch.norm(self.vk).item()) * self.vk
+				sstar = min(1.0, self.k/torch.norm(self.vk + sstar).item())*(sstar + self.vk)
+				# self.k = min(1.0, self.k/torch.norm(self.vk + sstar).item())
 				flag = self.cubicReg(D, g_parallel, C_parallel, grads, U_par, alphastar, sstar, gamma, get_loss, model, pflag)
 				
 			# Edit step size for params
-			sstar = self.k * (sstar / torch.norm(sstar))
-			if (self.k >= self.k_lower_bound and self.epoch_count % self.decay_interval == 0):
-				self.k *= self.decay_factor
-
-			new_params = get_flat_params_from(model) + sstar
-			set_flat_params_to(model, new_params)
-
-			# Update parameters
-			grads = self.flatten(torch.autograd.grad(loss, model.parameters(), create_graph=True))
-			y = grads - self.prev_flat_grad
+			# sstar = self.k * (sstar / torch.norm(sstar))
+			# if (self.k >= self.k_lower_bound and self.epoch_count % self.decay_interval == 0):
+			# 	self.k *= self.decay_factor
+						
 			
 			if flag:
+				new_params = get_flat_params_from(model) + sstar
+				set_flat_params_to(model, new_params)
+
+				# Update parameters
+				grads = self.flatten(torch.autograd.grad(loss, model.parameters(), create_graph=True))
+				y = grads - self.prev_flat_grad
 				if self.first:
 
 					self.S = sstar.unsqueeze(1)
@@ -225,21 +229,21 @@ class ARCLSR1(object):
 		return flag
 
 def linesearch(model,
-               f,
-               x,
-               fullstep,
-               expected_improve_rate,
-               max_backtracks=10,
-               accept_ratio=.1):
-    fval = f(True).data
-    for (_n_backtracks, stepfrac) in enumerate(.5**np.arange(max_backtracks)):
-        xnew = x + stepfrac * fullstep
-        set_flat_params_to(model, xnew)
-        newfval = f(True).data
-        actual_improve = fval - newfval
-        expected_improve = expected_improve_rate * stepfrac
-        ratio = actual_improve / expected_improve
+			   f,
+			   x,
+			   fullstep,
+			   expected_improve_rate,
+			   max_backtracks=10,
+			   accept_ratio=.1):
+	fval = f(True).data
+	for (_n_backtracks, stepfrac) in enumerate(.5**np.arange(max_backtracks)):
+		xnew = x + stepfrac * fullstep
+		set_flat_params_to(model, xnew)
+		newfval = f(True).data
+		actual_improve = fval - newfval
+		expected_improve = expected_improve_rate * stepfrac
+		ratio = actual_improve / expected_improve
 
-        if ratio.item() > accept_ratio and actual_improve.item() > 0:
-            return True, xnew
-    return False, x
+		if ratio.item() > accept_ratio and actual_improve.item() > 0:
+			return True, xnew
+	return False, x
