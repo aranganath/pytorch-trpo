@@ -120,7 +120,7 @@ def update_params(batch):
 			action_means, action_log_stds, action_stds = policy_net(Variable(states))
 				
 		log_prob = normal_log_density(Variable(actions), action_means, action_log_stds, action_stds)
-		#action_loss = -Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
+		# action_loss = -Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
 		action_loss1 = -Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
 		eps = 0.2
 		action_loss2 = -Variable(advantages) * torch.clip(torch.exp(log_prob - Variable(fixed_log_prob)), max = 5)
