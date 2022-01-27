@@ -17,8 +17,8 @@ class ARCLSR1(object):
 		self.flat_grad = []
 		self.lr = 1e-5
 		
-		self.maxiters = 5
-		self.maxhist = 5
+		self.maxiters = 10
+		self.maxhist = 100
 		self.first = True
 		self.mu = 1
 		
@@ -28,11 +28,13 @@ class ARCLSR1(object):
 		self.gamma2 = 2
 
 		# Decay parameters
-		self.k = 0.5
+		self.k = 0.1
 		self.k_lower_bound = 0.01
 		self.epoch_count = 0
 		self.momentum = 0.9
+
 		self.decay_factor = 0.95
+		self.decay_interval = 3
 
 
 	def flatten(self, value):
@@ -81,19 +83,19 @@ class ARCLSR1(object):
 				
 			# Edit step size for params
 			# sstar = self.k * (sstar / torch.norm(sstar))
-			# if (self.k >= self.k_lower_bound and self.epoch_count % self.decay_interval == 0):
-			# 	self.k *= self.decay_factor
+			#if (self.k >= self.k_lower_bound and self.epoch_count % self.decay_interval == 0):
+			#	self.k *= self.decay_factor
 						
 			
+			new_params = get_flat_params_from(model) + sstar
+			set_flat_params_to(model, new_params)
+
+			# Update parameters
+			grads = self.flatten(torch.autograd.grad(loss, model.parameters(), create_graph=True))
+			y = grads - self.prev_flat_grad
+			
 			if flag:
-				new_params = get_flat_params_from(model) + sstar
-				set_flat_params_to(model, new_params)
-
-				# Update parameters
-				grads = self.flatten(torch.autograd.grad(loss, model.parameters(), create_graph=True))
-				y = grads - self.prev_flat_grad
 				if self.first:
-
 					self.S = sstar.unsqueeze(1)
 					self.Y = y.unsqueeze(1)
 					self.SS = sstar.dot(sstar)[None, None]
@@ -102,7 +104,6 @@ class ARCLSR1(object):
 					self.first = False
 
 				elif self.S.shape[1]<self.maxhist:
-
 					self.SY = torch.vstack((torch.hstack((self.SY, self.S.T @ y.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.Y , sstar.unsqueeze(1).T @ y.unsqueeze(1)))))
 					self.SS = torch.vstack((torch.hstack((self.SS, self.S.T @ sstar.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.S , sstar.unsqueeze(1).T @ sstar.unsqueeze(1)))))
 					self.YY = torch.vstack((torch.hstack((self.YY, self.Y.T @ y.unsqueeze(1))), torch.hstack((y.unsqueeze(1).T @ self.Y , y.unsqueeze(1).T @ y.unsqueeze(1)))))
@@ -110,7 +111,6 @@ class ARCLSR1(object):
 					self.Y = torch.cat([self.Y, y.unsqueeze(1)], axis=1)
 
 				else:
-
 					self.SY = torch.vstack((torch.hstack((self.SY[1:,1:], self.S[:,1:].T @ y.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.Y[:,1:] , sstar.unsqueeze(1).T @ y.unsqueeze(1)))))
 					self.SS = torch.vstack((torch.hstack((self.SS[1:,1:], self.S[:,1:].T @ sstar.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.S[:,1:] , sstar.unsqueeze(1).T @ sstar.unsqueeze(1)))))
 					self.YY = torch.vstack((torch.hstack((self.YY[1:,1:], self.Y[:,1:].T @ y.unsqueeze(1))), torch.hstack((y.unsqueeze(1).T @ self.Y[:,1:] , y.unsqueeze(1).T @ y.unsqueeze(1)))))
