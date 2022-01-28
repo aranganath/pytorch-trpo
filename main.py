@@ -123,7 +123,7 @@ def update_params(batch):
 		# action_loss = -Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
 		action_loss1 = -Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
 		eps = 0.2
-		action_loss2 = -Variable(advantages) * torch.clip(torch.exp(log_prob - Variable(fixed_log_prob)), max = 5)
+		action_loss2 = -Variable(advantages) * torch.clip(torch.exp(log_prob - Variable(fixed_log_prob)), min = 1-eps, max=1+eps)
 		action_loss = torch.max(action_loss1, action_loss2)
 		return action_loss.mean()
 

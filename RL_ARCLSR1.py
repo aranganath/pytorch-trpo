@@ -22,8 +22,10 @@ class ARCLSR1(object):
 		self.first = True
 		self.mu = 1
 		
-		self.eta1 = 0
-		self.eta2 = 0.05
+		self.eta1 = 0.1
+		self.eta2 = 0.2
+		self.eta3 = 0.7
+		self.eta4 = 5
 		self.gamma1 = 1
 		self.gamma2 = 2
 
@@ -33,6 +35,11 @@ class ARCLSR1(object):
 		self.epoch_count = 0
 		self.momentum = 0.9
 		self.decay_factor = 0.95
+		self.delta = 1
+		self.method = 'trust'
+		self.tau1 = 0.1
+		self.tau2 = 0.2
+		self.tau3 = 0.6
 
 
 	def flatten(self, value):
@@ -74,23 +81,32 @@ class ARCLSR1(object):
 			else:
 				# We have one step. let's use it
 				D, g_parallel, C_parallel, U_par, alphastar, sstar, gamma, pflag = self.LSR1(self.S, self.SS, self.YY, self.SY, self.Y, grads, 1)
-				self.vk = self.momentum*min(1.0, self.k/torch.norm(self.vk).item()) * self.vk
-				sstar = min(1.0, self.k/torch.norm(self.vk + sstar).item())*(sstar + self.vk)
-				# self.k = min(1.0, self.k/torch.norm(self.vk + sstar).item())
-				flag = self.cubicReg(D, g_parallel, C_parallel, grads, U_par, alphastar, sstar, gamma, get_loss, model, pflag)
 				
-			# Edit step size for params
-			# sstar = self.k * (sstar / torch.norm(sstar))
-			# if (self.k >= self.k_lower_bound and self.epoch_count % self.decay_interval == 0):
-			# 	self.k *= self.decay_factor
-						
-			
-			if flag:
-				new_params = get_flat_params_from(model) + sstar
-				set_flat_params_to(model, new_params)
 
-				# Update parameters
-				grads = self.flatten(torch.autograd.grad(loss, model.parameters(), create_graph=True))
+				# Make sure the direction of descent lies within the trust region
+				if self.method == 'cubic' and not self.first:
+					self.vk = self.momentum*min(1.0, self.delta/torch.norm(self.vk).item()) * self.vk
+					sstar = min(1.0, self.k/torch.norm(self.vk + sstar).item())*(sstar + self.vk)
+					flag = self.cubicReg(D, g_parallel, C_parallel, grads, U_par, alphastar, sstar, gamma, get_loss, model, pflag)
+
+				if self.method == 'trust' and not self.first:
+					self.vk = self.momentum*min(1.0, self.delta/torch.norm(self.vk).item()) * self.vk
+					sstar = min(1.0, self.delta/torch.norm(self.vk + sstar).item())*(sstar + self.vk)
+
+					if torch.norm(sstar)> self.delta:
+						sstar = sstar/torch.norm(sstar)*self.delta
+
+					flag = self.trustRegion(D, g_parallel, C_parallel, grads, U_par, alphastar, sstar, gamma, get_loss, model, pflag)
+
+			new_params = get_flat_params_from(model) + sstar
+			set_flat_params_to(model, new_params)
+
+			# Update parameters
+			grads = self.flatten(torch.autograd.grad(loss, model.parameters(), create_graph=True))
+
+
+			if flag:
+				
 				y = grads - self.prev_flat_grad
 				if self.first:
 
@@ -227,6 +243,26 @@ class ARCLSR1(object):
 			self.mu = 0.5*(self.gamma1 + self.gamma2)*self.mu
 		
 		return flag
+
+	def trustRegion(self, D, g_parallel, C_parallel, g, U_par, alphastar, sstar, gamma, closure, model, pflag):
+		rhok = self.lmarquardt(D, g_parallel, C_parallel, g, U_par, alphastar, sstar, gamma, closure, model, pflag)
+		# print('rhok: '+str(rhok))
+
+		if rhok< self.tau2:
+			self.delta = min(self.delta*self.eta1, self.eta2*torch.norm(sstar))
+			flag = False
+
+		else:
+
+			flag = True
+			if rhok>=self.tau3 and torch.norm(sstar)>= self.eta3*self.delta:
+				self.detla = self.eta4*self.delta
+
+		return flag
+
+
+
+
 
 def linesearch(model,
 			   f,
