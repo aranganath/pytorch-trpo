@@ -17,8 +17,8 @@ class ARCLSR1(object):
 		self.flat_grad = []
 		self.lr = 1e-5
 		
-		self.maxiters = 5
-		self.maxhist = 5
+		self.maxiters = 10
+		self.maxhist = 100
 		self.first = True
 		self.mu = 1
 		
@@ -30,16 +30,21 @@ class ARCLSR1(object):
 		self.gamma2 = 2
 
 		# Decay parameters
-		self.k = 0.5
+		self.k = 0.1
 		self.k_lower_bound = 0.01
 		self.epoch_count = 0
 		self.momentum = 0.9
+
 		self.decay_factor = 0.95
+<<<<<<< HEAD
 		self.delta = 1
 		self.method = 'trust'
 		self.tau1 = 0.1
 		self.tau2 = 0.2
 		self.tau3 = 0.6
+=======
+		self.decay_interval = 3
+>>>>>>> c76e2ad878a25ca073a8c8a9c94fc3d9e1be717f
 
 
 	def flatten(self, value):
@@ -82,6 +87,7 @@ class ARCLSR1(object):
 				# We have one step. let's use it
 				D, g_parallel, C_parallel, U_par, alphastar, sstar, gamma, pflag = self.LSR1(self.S, self.SS, self.YY, self.SY, self.Y, grads, 1)
 				
+<<<<<<< HEAD
 
 				# Make sure the direction of descent lies within the trust region
 				if self.method == 'cubic' and not self.first:
@@ -109,7 +115,6 @@ class ARCLSR1(object):
 				
 				y = grads - self.prev_flat_grad
 				if self.first:
-
 					self.S = sstar.unsqueeze(1)
 					self.Y = y.unsqueeze(1)
 					self.SS = sstar.dot(sstar)[None, None]
@@ -118,7 +123,6 @@ class ARCLSR1(object):
 					self.first = False
 
 				elif self.S.shape[1]<self.maxhist:
-
 					self.SY = torch.vstack((torch.hstack((self.SY, self.S.T @ y.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.Y , sstar.unsqueeze(1).T @ y.unsqueeze(1)))))
 					self.SS = torch.vstack((torch.hstack((self.SS, self.S.T @ sstar.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.S , sstar.unsqueeze(1).T @ sstar.unsqueeze(1)))))
 					self.YY = torch.vstack((torch.hstack((self.YY, self.Y.T @ y.unsqueeze(1))), torch.hstack((y.unsqueeze(1).T @ self.Y , y.unsqueeze(1).T @ y.unsqueeze(1)))))
@@ -126,7 +130,6 @@ class ARCLSR1(object):
 					self.Y = torch.cat([self.Y, y.unsqueeze(1)], axis=1)
 
 				else:
-
 					self.SY = torch.vstack((torch.hstack((self.SY[1:,1:], self.S[:,1:].T @ y.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.Y[:,1:] , sstar.unsqueeze(1).T @ y.unsqueeze(1)))))
 					self.SS = torch.vstack((torch.hstack((self.SS[1:,1:], self.S[:,1:].T @ sstar.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.S[:,1:] , sstar.unsqueeze(1).T @ sstar.unsqueeze(1)))))
 					self.YY = torch.vstack((torch.hstack((self.YY[1:,1:], self.Y[:,1:].T @ y.unsqueeze(1))), torch.hstack((y.unsqueeze(1).T @ self.Y[:,1:] , y.unsqueeze(1).T @ y.unsqueeze(1)))))

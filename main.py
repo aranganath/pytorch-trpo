@@ -22,22 +22,31 @@ torch.set_default_tensor_type('torch.DoubleTensor')
 parser = argparse.ArgumentParser(description='PyTorch actor-critic example')
 parser.add_argument('--gamma', type=float, default=0.995, metavar='G',
 					help='discount factor (default: 0.995)')
+
 parser.add_argument('--env-name', default="Reacher-v2", metavar='G',
 					help='name of the environment to run')
+
 parser.add_argument('--tau', type=float, default=0.97, metavar='G',
 					help='gae (default: 0.97)')
+
 parser.add_argument('--l2-reg', type=float, default=1e-3, metavar='G',
 					help='l2 regularization regression (default: 1e-3)')
+
 parser.add_argument('--max-kl', type=float, default=1e-2, metavar='G',
 					help='max kl value (default: 1e-2)')
+
 parser.add_argument('--damping', type=float, default=1e-1, metavar='G',
 					help='damping (default: 1e-1)')
+
 parser.add_argument('--seed', type=int, default=543, metavar='N',
 					help='random seed (default: 1)')
-parser.add_argument('--batch-size', type=int, default=15000, metavar='N',
-					help='random seed (default: 1)')
+
+parser.add_argument('--batch-size', type = int, default = 20000, metavar='N',
+					help = 'random seed (default: 1)')
+
 parser.add_argument('--render', action='store_true',
 					help='render the environment')
+
 parser.add_argument('--log-interval', type=int, default=1, metavar='N',
 					help='interval between training status logs (default: 10)')
 args = parser.parse_args()
@@ -148,6 +157,7 @@ running_state = ZFilter((num_inputs,), clip=5)
 running_reward = ZFilter((1,), demean=False, clip=10)
 
 rewards_list = []
+# Infinite loop
 for i_episode in count(1):
 	memory = Memory()
 	# Update the epoch number for agent
@@ -158,12 +168,15 @@ for i_episode in count(1):
 	
 	num_episodes = 0
 	
+	# How many timestep to feed in one epoch
 	while num_steps < args.batch_size:
 		state = env.reset()
 		state = running_state(state)
 
 		reward_sum = 0
-		for t in range(20000): # Don't infinite loop while learning
+		done = False
+		t = 0
+		while not done:
 			action = select_action(state)
 			action = action.data[0].numpy()
 			next_state, reward, done, _ = env.step(action)
@@ -179,11 +192,11 @@ for i_episode in count(1):
 
 			if args.render:
 				env.render()
-			if done:
-				break
 
+			t += 1
 			state = next_state
-		num_steps += (t+1)
+		
+		num_steps += t
 		num_episodes += 1
 		reward_batch += reward_sum
 
@@ -200,8 +213,8 @@ for i_episode in count(1):
 	update_params(batch)
 	
 	if i_episode % args.log_interval == 0:
-		print('Episode {}\tLast reward: {}\tAverage reward {:.2f} \t '.format(
-			i_episode, reward_sum, reward_batch))
+		print('Episode {}\tMax. Reward: {}\tAverage reward {:.2f} \t '.format(
+			i_episode, int(max(rewards_list)), reward_batch))
 
 	if i_episode == 50:
 		break
