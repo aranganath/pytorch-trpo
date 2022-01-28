@@ -82,8 +82,6 @@ class ARCLSR1(object):
 			else:
 				# We have one step. let's use it
 				D, g_parallel, C_parallel, U_par, alphastar, sstar, gamma, pflag = self.LSR1(self.S, self.SS, self.YY, self.SY, self.Y, grads, 1)
-				
-<<<<<<< HEAD
 
 				# Make sure the direction of descent lies within the trust region
 				if self.method == 'cubic' and not self.first:
