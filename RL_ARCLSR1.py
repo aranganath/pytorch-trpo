@@ -36,15 +36,11 @@ class ARCLSR1(object):
 		self.momentum = 0.9
 
 		self.decay_factor = 0.95
-<<<<<<< HEAD
 		self.delta = 1
 		self.method = 'trust'
 		self.tau1 = 0.1
 		self.tau2 = 0.2
 		self.tau3 = 0.6
-=======
-		self.decay_interval = 3
->>>>>>> c76e2ad878a25ca073a8c8a9c94fc3d9e1be717f
 
 
 	def flatten(self, value):
