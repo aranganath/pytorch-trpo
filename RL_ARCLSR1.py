@@ -18,7 +18,7 @@ class ARCLSR1(object):
 		self.lr = 1e-5
 		
 		self.maxiters = 10
-		self.maxhist = 100
+		self.maxhist = 10
 		self.first = True
 		self.mu = 1
 		
@@ -36,7 +36,7 @@ class ARCLSR1(object):
 		self.momentum = 0.9
 
 		self.decay_factor = 0.95
-		self.delta = 1
+		self.delta = 10
 		self.method = 'trust'
 		self.tau1 = 0.1
 		self.tau2 = 0.2
@@ -97,6 +97,7 @@ class ARCLSR1(object):
 						sstar = sstar/torch.norm(sstar)*self.delta
 
 					flag = self.trustRegion(D, g_parallel, C_parallel, grads, U_par, alphastar, sstar, gamma, get_loss, model, pflag)
+					print(self.delta)
 
 			new_params = get_flat_params_from(model) + sstar
 			set_flat_params_to(model, new_params)
@@ -223,6 +224,16 @@ class ARCLSR1(object):
 		set_flat_params_to(model, x_init)
 		return (f1 - f2)/(-m)
 
+	def trustlmarquardt(self, g, sstar, closure, model):
+
+		m = g.T @ sstar
+
+		x_init = get_flat_params_from(model)
+		f1 = float(closure())
+		f2 = directional_evaluate(closure, model, x_init,1, sstar)
+		set_flat_params_to(model, x_init)
+		return (f1 - f2)/(-m)
+
 
 	def cubicReg(self, D, g_parallel, C_parallel, g, U_par, alphastar, sstar, gamma, closure, model, pflag):
 		rhok = self.lmarquardt(D, g_parallel, C_parallel, g, U_par, alphastar, sstar, gamma, closure, model, pflag)
@@ -242,11 +253,11 @@ class ARCLSR1(object):
 		return flag
 
 	def trustRegion(self, D, g_parallel, C_parallel, g, U_par, alphastar, sstar, gamma, closure, model, pflag):
-		rhok = self.lmarquardt(D, g_parallel, C_parallel, g, U_par, alphastar, sstar, gamma, closure, model, pflag)
+		rhok = self.trustlmarquardt(g, sstar, closure, model)
 		# print('rhok: '+str(rhok))
 
 		if rhok< self.tau2:
-			self.delta = min(self.delta*self.eta1, self.eta2*torch.norm(sstar))
+			self.delta = min(self.delta*self.eta1, self.eta2*torch.norm(sstar).item())
 			flag = False
 
 		else:
