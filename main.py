@@ -15,6 +15,7 @@ from RL_ARCLSR1 import ARCLSR1
 torch.utils.backcompat.broadcast_warning.enabled = True
 torch.utils.backcompat.keepdim_warning.enabled = True
 import pickle as pkl
+import os
 
 torch.set_default_tensor_type('torch.DoubleTensor')
 
@@ -52,7 +53,7 @@ torch.manual_seed(args.seed)
 policy_net = Policy(num_inputs, num_actions)
 value_net = Value(num_inputs)
 
-optimize = ARCLSR1(maxhist = 5, maxiters=5)
+optimize = ARCLSR1(maxhist = 50, maxiters=50)
 total_rewards = []
 
 def select_action(state):
@@ -186,6 +187,9 @@ for i_episode in count(1):
         break
 
 
+if not os.path.isdir(args.env_name):
+    os.mkdir(args.env_name)
 
-with open('ARCLSR1hist100maxiter100.pkl','wb') as f:
+
+with open('./'+args.env_name+'/ARCLSR150hist50iter.pkl','wb') as f:
 	pkl.dump(total_rewards, f, protocol=pkl.HIGHEST_PROTOCOL)
