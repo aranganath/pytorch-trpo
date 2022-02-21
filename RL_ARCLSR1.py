@@ -6,7 +6,7 @@ from utils import *
 import scipy.linalg as sl
 
 class ARCLSR1(object):
-	def __init__(self, maxiters=10, maxhist=10):
+	def __init__(self, maxiters=100, maxhist=100):
 		self.S = None
 		self.Y = None
 		self.SS = None
@@ -17,8 +17,8 @@ class ARCLSR1(object):
 		self.flat_grad = []
 		self.lr = 1e-5
 		
-		self.maxiters = 10
-		self.maxhist = 10
+		self.maxiters = maxiters
+		self.maxhist = maxhist
 		self.first = True
 		self.mu = 1
 		
@@ -37,7 +37,7 @@ class ARCLSR1(object):
 
 		self.decay_factor = 0.95
 		self.delta = 10
-		self.method = 'trust'
+		self.method = 'cubic'
 		self.tau1 = 0.1
 		self.tau2 = 0.2
 		self.tau3 = 0.6
@@ -85,9 +85,13 @@ class ARCLSR1(object):
 
 				# Make sure the direction of descent lies within the trust region
 				if self.method == 'cubic' and not self.first:
+					# if torch.norm(self.vk).item() > 0:
 					self.vk = self.momentum*min(1.0, self.delta/torch.norm(self.vk).item()) * self.vk
 					sstar = min(1.0, self.k/torch.norm(self.vk + sstar).item())*(sstar + self.vk)
 					flag = self.cubicReg(D, g_parallel, C_parallel, grads, U_par, alphastar, sstar, gamma, get_loss, model, pflag)
+					# else:
+					# 	self.vk = sstar
+					# 	flag = self.cubicReg(D, g_parallel, C_parallel, grads, U_par, alphastar, sstar, gamma, get_loss, model, pflag)
 
 				if self.method == 'trust' and not self.first:
 					self.vk = self.momentum*min(1.0, self.delta/torch.norm(self.vk).item()) * self.vk
@@ -97,7 +101,6 @@ class ARCLSR1(object):
 						sstar = sstar/torch.norm(sstar)*self.delta
 
 					flag = self.trustRegion(D, g_parallel, C_parallel, grads, U_par, alphastar, sstar, gamma, get_loss, model, pflag)
-					print(self.delta)
 
 			new_params = get_flat_params_from(model) + sstar
 			set_flat_params_to(model, new_params)
@@ -106,33 +109,34 @@ class ARCLSR1(object):
 			grads = self.flatten(torch.autograd.grad(loss, model.parameters(), create_graph=True))
 
 
-			if flag:
+			# if flag:
 				
-				y = grads - self.prev_flat_grad
-				if self.first:
-					self.S = sstar.unsqueeze(1)
-					self.Y = y.unsqueeze(1)
-					self.SS = sstar.dot(sstar)[None, None]
-					self.SY = sstar.dot(y)[None, None]
-					self.YY = y.dot(y)[None,None]
-					self.first = False
+			y = grads - self.prev_flat_grad
+			if self.first:
+				self.S = sstar.unsqueeze(1)
+				self.Y = y.unsqueeze(1)
+				self.SS = sstar.dot(sstar)[None, None]
+				self.SY = sstar.dot(y)[None, None]
+				self.YY = y.dot(y)[None,None]
+				self.first = False
 
-				elif self.S.shape[1]<self.maxhist:
-					self.SY = torch.vstack((torch.hstack((self.SY, self.S.T @ y.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.Y , sstar.unsqueeze(1).T @ y.unsqueeze(1)))))
-					self.SS = torch.vstack((torch.hstack((self.SS, self.S.T @ sstar.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.S , sstar.unsqueeze(1).T @ sstar.unsqueeze(1)))))
-					self.YY = torch.vstack((torch.hstack((self.YY, self.Y.T @ y.unsqueeze(1))), torch.hstack((y.unsqueeze(1).T @ self.Y , y.unsqueeze(1).T @ y.unsqueeze(1)))))
-					self.S = torch.cat([self.S, sstar.unsqueeze(1)], axis=1)
-					self.Y = torch.cat([self.Y, y.unsqueeze(1)], axis=1)
+			elif self.S.shape[1]<self.maxhist:
+				self.SY = torch.vstack((torch.hstack((self.SY, self.S.T @ y.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.Y , sstar.unsqueeze(1).T @ y.unsqueeze(1)))))
+				self.SS = torch.vstack((torch.hstack((self.SS, self.S.T @ sstar.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.S , sstar.unsqueeze(1).T @ sstar.unsqueeze(1)))))
+				self.YY = torch.vstack((torch.hstack((self.YY, self.Y.T @ y.unsqueeze(1))), torch.hstack((y.unsqueeze(1).T @ self.Y , y.unsqueeze(1).T @ y.unsqueeze(1)))))
+				self.S = torch.cat([self.S, sstar.unsqueeze(1)], axis=1)
+				self.Y = torch.cat([self.Y, y.unsqueeze(1)], axis=1)
 
-				else:
-					self.SY = torch.vstack((torch.hstack((self.SY[1:,1:], self.S[:,1:].T @ y.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.Y[:,1:] , sstar.unsqueeze(1).T @ y.unsqueeze(1)))))
-					self.SS = torch.vstack((torch.hstack((self.SS[1:,1:], self.S[:,1:].T @ sstar.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.S[:,1:] , sstar.unsqueeze(1).T @ sstar.unsqueeze(1)))))
-					self.YY = torch.vstack((torch.hstack((self.YY[1:,1:], self.Y[:,1:].T @ y.unsqueeze(1))), torch.hstack((y.unsqueeze(1).T @ self.Y[:,1:] , y.unsqueeze(1).T @ y.unsqueeze(1)))))
-					self.S = torch.cat([self.S[:,1:], sstar.unsqueeze(1)], axis=1)
-					self.Y = torch.cat([self.Y[:,1:], y.unsqueeze(1)], axis=1)
+			else:
+				self.SY = torch.vstack((torch.hstack((self.SY[1:,1:], self.S[:,1:].T @ y.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.Y[:,1:] , sstar.unsqueeze(1).T @ y.unsqueeze(1)))))
+				self.SS = torch.vstack((torch.hstack((self.SS[1:,1:], self.S[:,1:].T @ sstar.unsqueeze(1))), torch.hstack((sstar.unsqueeze(1).T @ self.S[:,1:] , sstar.unsqueeze(1).T @ sstar.unsqueeze(1)))))
+				self.YY = torch.vstack((torch.hstack((self.YY[1:,1:], self.Y[:,1:].T @ y.unsqueeze(1))), torch.hstack((y.unsqueeze(1).T @ self.Y[:,1:] , y.unsqueeze(1).T @ y.unsqueeze(1)))))
+				self.S = torch.cat([self.S[:,1:], sstar.unsqueeze(1)], axis=1)
+				self.Y = torch.cat([self.Y[:,1:], y.unsqueeze(1)], axis=1)
 
 			self.prev_flat_grad = grads
-			
+		
+		print(self.S.shape)
 		return loss
 
 	def LSR1(self, S, SS, YY, SY, Y, flat_grad, gammaIn):
