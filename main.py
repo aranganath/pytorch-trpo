@@ -71,7 +71,7 @@ def update_params(batch):
     returns = torch.Tensor(actions.size(0),1)
     deltas = torch.Tensor(actions.size(0),1)
     advantages = torch.Tensor(actions.size(0),1)
-
+ 
     prev_return = 0
     prev_value = 0
     prev_advantage = 0
