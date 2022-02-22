@@ -4,6 +4,7 @@ import torch
 from torch.autograd import Variable
 from utils import *
 import scipy.linalg as sl
+from pdb import set_trace
 
 class ARCLSR1(object):
 	def __init__(self, maxiters=100, maxhist=100):
@@ -22,10 +23,10 @@ class ARCLSR1(object):
 		self.first = True
 		self.mu = 1
 		
-		self.eta1 = 0.1
-		self.eta2 = 0.2
-		self.eta3 = 0.7
-		self.eta4 = 5
+		self.eta1 = 0.5
+		self.eta2 = 0.65
+		self.eta3 = 0.75
+		self.eta4 = 2
 		self.gamma1 = 1
 		self.gamma2 = 2
 
@@ -33,9 +34,8 @@ class ARCLSR1(object):
 		self.k = 0.1
 		self.k_lower_bound = 0.01
 		self.epoch_count = 0
-		self.momentum = 0.9
+		self.momentum = 0.75
 
-		self.decay_factor = 0.95
 		self.delta = 10
 		self.method = 'cubic'
 		self.tau1 = 0.1
@@ -70,8 +70,9 @@ class ARCLSR1(object):
 			kl_loss = kl_loss.mean()
 
 			loss = get_loss()
-			kl_grads = self.flatten(torch.autograd.grad(kl_loss, model.parameters(), create_graph=True))
-			grads = self.flatten(torch.autograd.grad(loss, model.parameters(), create_graph=True))
+			model.zero_grad()
+			loss.backward(retain_graph=True)
+			grads = self.gather_flat_grad(model)
 			if self.first:
 				t = min(1., 1./grads.abs().sum())*self.lr
 				sstar = t*grads
@@ -104,12 +105,13 @@ class ARCLSR1(object):
 
 			new_params = get_flat_params_from(model) + sstar
 			set_flat_params_to(model, new_params)
+			loss = get_loss()
+			model.zero_grad()
+			loss.backward(retain_graph=True)
 
-			# Update parameters
-			grads = self.flatten(torch.autograd.grad(loss, model.parameters(), create_graph=True))
+			grads = self.gather_flat_grad(model)
 
 
-			# if flag:
 				
 			y = grads - self.prev_flat_grad
 			if self.first:
@@ -136,7 +138,7 @@ class ARCLSR1(object):
 
 			self.prev_flat_grad = grads
 		
-		print(self.S.shape)
+		# print(self.S.shape)
 		return loss
 
 	def LSR1(self, S, SS, YY, SY, Y, flat_grad, gammaIn):

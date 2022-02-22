@@ -53,7 +53,7 @@ torch.manual_seed(args.seed)
 policy_net = Policy(num_inputs, num_actions)
 value_net = Value(num_inputs)
 
-optimize = ARCLSR1(maxhist = 50, maxiters=50)
+optimize = ARCLSR1(maxhist = 10, maxiters=2)
 total_rewards = []
 
 def select_action(state):
