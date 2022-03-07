@@ -16,7 +16,7 @@ torch.utils.backcompat.broadcast_warning.enabled = True
 torch.utils.backcompat.keepdim_warning.enabled = True
 import pickle as pkl
 import os
-
+optim = 'ARCLSR1'
 torch.set_default_tensor_type('torch.DoubleTensor')
 
 parser = argparse.ArgumentParser(description='PyTorch actor-critic example')
@@ -53,7 +53,7 @@ torch.manual_seed(args.seed)
 policy_net = Policy(num_inputs, num_actions)
 value_net = Value(num_inputs)
 
-optimize = ARCLSR1(maxhist = 10, maxiters=2)
+optimize = ARCLSR1(maxhist = 2, maxiters=10, verbose=True)
 total_rewards = []
 
 def select_action(state):
@@ -118,10 +118,16 @@ def update_params(batch):
                 action_means, action_log_stds, action_stds = policy_net(Variable(states))
         else:
             action_means, action_log_stds, action_stds = policy_net(Variable(states))
-                
+
         log_prob = normal_log_density(Variable(actions), action_means, action_log_stds, action_stds)
-        action_loss = -Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
-        return action_loss.mean()
+        # Original trpo loss function
+        #action_loss = -Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
+        action_loss1 = Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
+        # print('Ratio: {}'.format(torch.exp(log_prob - Variable(fixed_log_prob))[torch.exp(log_prob - Variable(fixed_log_prob))<0]))
+        eps = 0.2
+        action_loss2 = Variable(advantages) * torch.clip(torch.exp(log_prob - Variable(fixed_log_prob)), max=2)
+        action_loss = torch.min(action_loss1, action_loss2)
+        return -action_loss.mean()
 
 
     def get_kl():
@@ -133,12 +139,15 @@ def update_params(batch):
         kl = log_std1 - log_std0 + (std0.pow(2) + (mean0 - mean1).pow(2)) / (2.0 * std1.pow(2)) - 0.5
         return kl.sum(1, keepdim=True)
 
-    # trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
-    optimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping)
+    if optim =='TRPO':
+        trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
+    if optim =='ARCLSR1':
+        optimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping)
 
 running_state = ZFilter((num_inputs,), clip=5)
 running_reward = ZFilter((1,), demean=False, clip=10)
 
+episodes = 500
 for i_episode in count(1):
     memory = Memory()
 
@@ -183,7 +192,7 @@ for i_episode in count(1):
             i_episode, reward_sum, reward_batch))
         total_rewards.append(reward_batch)
 
-    if i_episode == 50:
+    if i_episode == episodes:
         break
 
 
@@ -191,5 +200,5 @@ if not os.path.isdir(args.env_name):
     os.mkdir(args.env_name)
 
 
-with open('./'+args.env_name+'/ARCLSR150hist50iter.pkl','wb') as f:
+with open('./'+args.env_name+'/'+optim+str(episodes)+'.pkl','wb') as f:
 	pkl.dump(total_rewards, f, protocol=pkl.HIGHEST_PROTOCOL)
