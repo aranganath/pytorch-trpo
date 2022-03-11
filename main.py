@@ -112,7 +112,7 @@ def update_params(batch):
 
         log_prob = normal_log_density(Variable(actions), action_means, action_log_stds, action_stds)
         # Original trpo loss function
-        #action_loss = -Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
+        # action_loss = -Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
         action_loss1 = Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
         # print('Ratio: {}'.format(torch.exp(log_prob - Variable(fixed_log_prob))[torch.exp(log_prob - Variable(fixed_log_prob))<0]))
         eps = 0.2
@@ -134,14 +134,14 @@ def update_params(batch):
         optimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping, environment)
 
     if opt =='trpo':
-        trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping, environment)
+        trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
 
 
-envs = ['Hopper-v2']
+envs = ['Humanoid-v2', 'Swimmer-v2', 'Reacher-v2', 'Ant-v2']
 opts = ['ARCLSR1', 'trpo']
 
-for opt in opts:
-    for environment in envs:
+for environment in envs:
+    for opt in opts:
         print('Environment: {}, Optimizer: {}'.format(environment, opt), flush=True)
         env = gym.make(environment)
 
@@ -201,7 +201,7 @@ for opt in opts:
             update_params(batch)
 
             if i_episode % args.log_interval == 0:
-                
+
                 print('Episode {}\tLast reward: {}\tAverage reward {:.2f}'.format(
                     i_episode, reward_sum, reward_batch))
                 total_rewards.append(reward_batch)
