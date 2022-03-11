@@ -16,7 +16,9 @@ torch.utils.backcompat.broadcast_warning.enabled = True
 torch.utils.backcompat.keepdim_warning.enabled = True
 import pickle as pkl
 import os
-optim = 'ARCLSR1'
+from sys import stdout
+import time
+
 torch.set_default_tensor_type('torch.DoubleTensor')
 
 parser = argparse.ArgumentParser(description='PyTorch actor-critic example')
@@ -42,19 +44,8 @@ parser.add_argument('--log-interval', type=int, default=1, metavar='N',
                     help='interval between training status logs (default: 10)')
 args = parser.parse_args()
 
-env = gym.make(args.env_name)
+optimize = ARCLSR1(maxhist = 50, maxiters=10, verbose=True)
 
-num_inputs = env.observation_space.shape[0]
-num_actions = env.action_space.shape[0]
-
-env.seed(args.seed)
-torch.manual_seed(args.seed)
-
-policy_net = Policy(num_inputs, num_actions)
-value_net = Value(num_inputs)
-
-optimize = ARCLSR1(maxhist = 2, maxiters=10, verbose=True)
-total_rewards = []
 
 def select_action(state):
     state = torch.from_numpy(state).unsqueeze(0)
@@ -139,66 +130,92 @@ def update_params(batch):
         kl = log_std1 - log_std0 + (std0.pow(2) + (mean0 - mean1).pow(2)) / (2.0 * std1.pow(2)) - 0.5
         return kl.sum(1, keepdim=True)
 
-    if optim =='TRPO':
-        trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
-    if optim =='ARCLSR1':
-        optimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping)
+    if opt =='ARCLSR1':
+        optimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping, environment)
 
-running_state = ZFilter((num_inputs,), clip=5)
-running_reward = ZFilter((1,), demean=False, clip=10)
+    if opt =='trpo':
+        trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping, environment)
 
-episodes = 500
-for i_episode in count(1):
-    memory = Memory()
 
-    num_steps = 0
-    reward_batch = 0
-    num_episodes = 0
-    while num_steps < args.batch_size:
-        state = env.reset()
-        state = running_state(state)
+envs = ['Hopper-v2']
+opts = ['ARCLSR1', 'trpo']
 
-        reward_sum = 0
-        for t in range(10000): # Don't infinite loop while learning
-            action = select_action(state)
-            action = action.data[0].numpy()
-            next_state, reward, done, _ = env.step(action)
-            reward_sum += reward
+for opt in opts:
+    for environment in envs:
+        print('Environment: {}, Optimizer: {}'.format(environment, opt), flush=True)
+        env = gym.make(environment)
 
-            next_state = running_state(next_state)
+        num_inputs = env.observation_space.shape[0]
+        num_actions = env.action_space.shape[0]
 
-            mask = 1
-            if done:
-                mask = 0
+        env.seed(args.seed)
+        torch.manual_seed(args.seed)
 
-            memory.push(state, np.array([action]), mask, next_state, reward)
+        policy_net = Policy(num_inputs, num_actions)
+        value_net = Value(num_inputs)
+        
+        total_rewards = []
 
-            if args.render:
-                env.render()
-            if done:
+        running_state = ZFilter((num_inputs,), clip=5)
+        running_reward = ZFilter((1,), demean=False, clip=10)
+
+        episodes = 500
+
+        for i_episode in count(1):
+            memory = Memory()
+
+            num_steps = 0
+            reward_batch = 0
+            num_episodes = 0
+            while num_steps < args.batch_size:
+                state = env.reset()
+                state = running_state(state)
+
+                reward_sum = 0
+                for t in range(10000): # Don't infinite loop while learning
+                    action = select_action(state)
+                    action = action.data[0].numpy()
+                    next_state, reward, done, _ = env.step(action)
+                    reward_sum += reward
+
+                    next_state = running_state(next_state)
+
+                    mask = 1
+                    if done:
+                        mask = 0
+
+                    memory.push(state, np.array([action]), mask, next_state, reward)
+
+                    if args.render:
+                        env.render()
+                    if done:
+                        break
+
+                    state = next_state
+                num_steps += (t-1)
+                num_episodes += 1
+                reward_batch += reward_sum
+
+            reward_batch /= num_episodes
+            batch = memory.sample()
+            update_params(batch)
+
+            if i_episode % args.log_interval == 0:
+                
+                print('Episode {}\tLast reward: {}\tAverage reward {:.2f}'.format(
+                    i_episode, reward_sum, reward_batch))
+                total_rewards.append(reward_batch)
+
+            if i_episode == episodes:
                 break
 
-            state = next_state
-        num_steps += (t-1)
-        num_episodes += 1
-        reward_batch += reward_sum
 
-    reward_batch /= num_episodes
-    batch = memory.sample()
-    update_params(batch)
-
-    if i_episode % args.log_interval == 0:
-        print('Episode {}\tLast reward: {}\tAverage reward {:.2f}'.format(
-            i_episode, reward_sum, reward_batch))
-        total_rewards.append(reward_batch)
-
-    if i_episode == episodes:
-        break
+        if not os.path.isdir(environment):
+            os.mkdir(environment)
 
 
-if not os.path.isdir(args.env_name):
-    os.mkdir(args.env_name)
+        with open('./'+environment+'/'+opt+str(episodes)+'.pkl','wb') as f:
+        	pkl.dump(total_rewards, f, protocol=pkl.HIGHEST_PROTOCOL)
 
 
-with open('./'+args.env_name+'/'+optim+str(episodes)+'.pkl','wb') as f:
-	pkl.dump(total_rewards, f, protocol=pkl.HIGHEST_PROTOCOL)
+

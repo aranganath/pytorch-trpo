@@ -5,6 +5,7 @@ from torch.autograd import Variable
 from utils import *
 import scipy.linalg as sl
 from pdb import set_trace
+from sys import stdout
 
 class ARCLSR1(object):
 	def __init__(self, maxiters=100, maxhist=100, verbose=False):
@@ -21,14 +22,14 @@ class ARCLSR1(object):
 		self.maxiters = maxiters
 		self.maxhist = maxhist
 		self.first = True
-		self.mu = 1e2
+		self.mu = 1
 		
-		self.eta1 = 0.50
-		self.eta2 = 0.75
+		self.eta1 = 0.25
+		self.eta2 = 0.50
 		self.eta3 = 0.75
 		self.eta4 = 2
-		self.gamma1 = 0.5
-		self.gamma2 = 1e3
+		self.gamma1 = 1
+		self.gamma2 = 2
 		self.gamma = 1
 
 		# Decay parameters
@@ -62,7 +63,7 @@ class ARCLSR1(object):
 		return torch.cat(views, axis=0)
 
 
-	def arclsr1(self, model, get_loss, get_kl, max_kl, damping):
+	def arclsr1(self, model, get_loss, get_kl, max_kl, damping, environment):
 		# We use the gradient from the traditional loss function
 		# But we use the hessian approximation using the kl-divergence
 		# How do we do it ?
