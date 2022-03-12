@@ -136,7 +136,7 @@ def update_params(batch, policy_net, value_net):
         trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
 
 
-envs = ['Humanoid-v2', 'Ant-v2']
+envs = ['Humanoid-v2', 'Ant-v2', 'Walker2d-v2', 'Swimmer']
 opts = ['ARCLSR1', 'trpo']
 
 for environment in envs:
@@ -212,6 +212,7 @@ for environment in envs:
         if not os.path.isdir(environment):
             os.mkdir(environment)
 
+        print('Saving at location ./'+environment+'/'+opt+str(episodes)+'.pkl')
 
         with open('./'+environment+'/'+opt+str(episodes)+'.pkl','wb') as f:
         	pkl.dump(total_rewards, f, protocol=pkl.HIGHEST_PROTOCOL)
