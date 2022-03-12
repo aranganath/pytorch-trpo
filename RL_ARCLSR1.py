@@ -194,7 +194,12 @@ class ARCLSR1(object):
 			set_trace()
 
 		#Compute lambda as in equation (7)
-		g_parallel = U_par.T @ flat_grad
+		#set_trace()
+		try:
+			g_parallel = U_par.T @ flat_grad
+		except:
+			from pdb import set_trace
+			set_trace()
 		C_parallel = []
 
 		gperp = flat_grad - U_par @ g_parallel

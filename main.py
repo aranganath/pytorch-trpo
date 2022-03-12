@@ -44,16 +44,14 @@ parser.add_argument('--log-interval', type=int, default=1, metavar='N',
                     help='interval between training status logs (default: 10)')
 args = parser.parse_args()
 
-optimize = ARCLSR1(maxhist = 50, maxiters=10, verbose=True)
 
-
-def select_action(state):
+def select_action(state, policy_net, value_net):
     state = torch.from_numpy(state).unsqueeze(0)
     action_mean, _, action_std = policy_net(Variable(state))
     action = torch.normal(action_mean, action_std)
     return action
 
-def update_params(batch):
+def update_params(batch, policy_net, value_net):
     rewards = torch.Tensor(batch.reward)
     masks = torch.Tensor(batch.mask)
     actions = torch.Tensor(np.concatenate(batch.action, 0))
@@ -131,13 +129,14 @@ def update_params(batch):
         return kl.sum(1, keepdim=True)
 
     if opt =='ARCLSR1':
+        optimize = ARCLSR1(maxhist = 50, maxiters=10, verbose=True)
         optimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping, environment)
 
     if opt =='trpo':
         trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
 
 
-envs = ['Humanoid-v2', 'Swimmer-v2', 'Reacher-v2', 'Ant-v2']
+envs = ['Humanoid-v2', 'Ant-v2']
 opts = ['ARCLSR1', 'trpo']
 
 for environment in envs:
@@ -173,7 +172,7 @@ for environment in envs:
 
                 reward_sum = 0
                 for t in range(10000): # Don't infinite loop while learning
-                    action = select_action(state)
+                    action = select_action(state, policy_net, value_net)
                     action = action.data[0].numpy()
                     next_state, reward, done, _ = env.step(action)
                     reward_sum += reward
@@ -198,7 +197,7 @@ for environment in envs:
 
             reward_batch /= num_episodes
             batch = memory.sample()
-            update_params(batch)
+            update_params(batch, policy_net, value_net)
 
             if i_episode % args.log_interval == 0:
 
