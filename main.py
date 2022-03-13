@@ -61,7 +61,7 @@ def update_params(batch, policy_net, value_net):
     returns = torch.Tensor(actions.size(0),1)
     deltas = torch.Tensor(actions.size(0),1)
     advantages = torch.Tensor(actions.size(0),1)
- 
+
     prev_return = 0
     prev_value = 0
     prev_advantage = 0
@@ -129,14 +129,14 @@ def update_params(batch, policy_net, value_net):
         return kl.sum(1, keepdim=True)
 
     if opt =='ARCLSR1':
-        optimize = ARCLSR1(maxhist = 50, maxiters=10, verbose=True)
+        optimize = ARCLSR1(maxhist = 2, maxiters=10, verbose=True)
         optimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping, environment)
 
     if opt =='trpo':
         trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
 
 
-envs = ['Humanoid-v2', 'Ant-v2', 'Walker2d-v2', 'Swimmer']
+envs = ['InvertedPendulum-v2']
 opts = ['ARCLSR1', 'trpo']
 
 for environment in envs:
@@ -174,6 +174,7 @@ for environment in envs:
                 for t in range(10000): # Don't infinite loop while learning
                     action = select_action(state, policy_net, value_net)
                     action = action.data[0].numpy()
+                    #time.sleep(0.002)
                     next_state, reward, done, _ = env.step(action)
                     reward_sum += reward
 
@@ -216,6 +217,3 @@ for environment in envs:
 
         with open('./'+environment+'/'+opt+str(episodes)+'.pkl','wb') as f:
         	pkl.dump(total_rewards, f, protocol=pkl.HIGHEST_PROTOCOL)
-
-
-

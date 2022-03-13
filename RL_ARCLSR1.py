@@ -44,6 +44,7 @@ class ARCLSR1(object):
 		self.tau2 = 0.2
 		self.tau3 = 0.6
 		self.verbose = verbose
+		self.eps = 1e-8
 
 
 	def flatten(self, value):
@@ -76,27 +77,36 @@ class ARCLSR1(object):
 			model.zero_grad()
 			loss.backward(retain_graph=True)
 			grads = self.gather_flat_grad(model)
+			if torch.norm(grads)<self.eps or torch.norm(grads).isnan():
+				break
+
 			if self.verbose:
 				print('------------------------------------------------------------')
 				print('Iteration: {} Loss: {} Gradient norm: {} '.format(it, loss.item(), torch.norm(self.gather_flat_grad(model))))
-				print('Mu: {} rhok: {} gamma: {}'.format(self.mu, self.rhok, self.gamma))	
+				print('Mu: {} rhok: {} gamma: {}'.format(self.mu, self.rhok, self.gamma))
 				print('------------------------------------------------------------')
 			if self.first:
 				t = min(1., 1./grads.abs().sum())
 				sstar = -t*grads
 				self.prev_flat_grad = grads
 				self.vk = sstar
+				if sstar.any().isnan():
+					break
+
 				flag = True
 
 			else:
 				# We have one step. let's use it
 				D, g_parallel, C_parallel, U_par, alphastar, sstar, pflag = self.LSR1(self.S, self.SS, self.YY, self.SY, self.Y, grads)
+				if sstar.any().isnan():
+					break
+
 
 				# Make sure the direction of descent lies within the trust region
 				if self.method == 'cubic' and not self.first:
-					# if torch.norm(self.vk).item() > 0:
-					# self.vk = self.momentum*min(1.0, 1/(torch.norm(self.vk).item()*self.mu)) * self.vk
-					# sstar = min(1.0, self.k/torch.norm(self.vk + sstar).item())*(sstar + self.vk)
+					#if torch.norm(self.vk).item() > 0:
+					#	self.vk = self.momentum*min(1.0, 1/(torch.norm(self.vk).item()*self.mu)) * self.vk
+					#	sstar = min(1.0, self.k/torch.norm(self.vk + sstar).item())*(sstar + self.vk)
 
 					flag = self.cubicReg(D, g_parallel, C_parallel, grads, U_par, alphastar, sstar, get_loss, model, pflag)
 					# else:
