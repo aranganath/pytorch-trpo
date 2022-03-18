@@ -18,8 +18,13 @@ import pickle as pkl
 import os
 from sys import stdout
 import time
+import matplotlib.pyplot as plt
 
-torch.set_default_tensor_type('torch.DoubleTensor')
+torch.set_default_tensor_type('torch.cuda.DoubleTensor')
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+optimize = ARCLSR1(maxhist = 10, maxiters = 20, verbose=True)
+
 
 parser = argparse.ArgumentParser(description='PyTorch actor-critic example')
 parser.add_argument('--gamma', type=float, default=0.995, metavar='G',
@@ -47,7 +52,7 @@ args = parser.parse_args()
 
 def select_action(state, policy_net, value_net):
     state = torch.from_numpy(state).unsqueeze(0)
-    action_mean, _, action_std = policy_net(Variable(state))
+    action_mean, _, action_std = policy_net(Variable(state).to(device))
     action = torch.normal(action_mean, action_std)
     return action
 
@@ -91,9 +96,9 @@ def update_params(batch, policy_net, value_net):
         for param in value_net.parameters():
             value_loss += param.pow(2).sum() * args.l2_reg
         value_loss.backward()
-        return (value_loss.data.double().numpy(), get_flat_grad_from(value_net).data.double().numpy())
+        return (value_loss.data.double().cpu().numpy(), get_flat_grad_from(value_net).data.double().cpu().numpy())
 
-    flat_params, _, opt_info = scipy.optimize.fmin_l_bfgs_b(get_value_loss, get_flat_params_from(value_net).double().numpy(), maxiter=25)
+    flat_params, _, opt_info = scipy.optimize.fmin_l_bfgs_b(get_value_loss, get_flat_params_from(value_net).double().cpu().numpy(), maxiter=25)
     set_flat_params_to(value_net, torch.Tensor(flat_params))
 
     advantages = (advantages - advantages.mean()) / advantages.std()
@@ -129,14 +134,13 @@ def update_params(batch, policy_net, value_net):
         return kl.sum(1, keepdim=True)
 
     if opt =='ARCLSR1':
-        optimize = ARCLSR1(maxhist = 2, maxiters=10, verbose=True)
         optimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping, environment)
 
     if opt =='trpo':
         trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
 
 
-envs = ['InvertedPendulum-v2']
+envs = ['Ant-v2']
 opts = ['ARCLSR1', 'trpo']
 
 for environment in envs:
@@ -150,15 +154,15 @@ for environment in envs:
         env.seed(args.seed)
         torch.manual_seed(args.seed)
 
-        policy_net = Policy(num_inputs, num_actions)
-        value_net = Value(num_inputs)
+        policy_net = Policy(num_inputs, num_actions).to(device)
+        value_net = Value(num_inputs).to(device)
         
         total_rewards = []
 
         running_state = ZFilter((num_inputs,), clip=5)
         running_reward = ZFilter((1,), demean=False, clip=10)
 
-        episodes = 500
+        episodes = 1000
 
         for i_episode in count(1):
             memory = Memory()
@@ -173,7 +177,7 @@ for environment in envs:
                 reward_sum = 0
                 for t in range(10000): # Don't infinite loop while learning
                     action = select_action(state, policy_net, value_net)
-                    action = action.data[0].numpy()
+                    action = action.data[0].cpu().numpy()
                     #time.sleep(0.002)
                     next_state, reward, done, _ = env.step(action)
                     reward_sum += reward
@@ -206,8 +210,11 @@ for environment in envs:
                     i_episode, reward_sum, reward_batch))
                 total_rewards.append(reward_batch)
 
+            # plt.plot(total_rewards, i_episode)
+            # plt.show()
             if i_episode == episodes:
                 break
+
 
 
         if not os.path.isdir(environment):

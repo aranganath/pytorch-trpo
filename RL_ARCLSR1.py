@@ -22,10 +22,10 @@ class ARCLSR1(object):
 		self.maxiters = maxiters
 		self.maxhist = maxhist
 		self.first = True
-		self.mu = 1
+		self.mu = 1e3
 		
-		self.eta1 = 0.25
-		self.eta2 = 0.50
+		self.eta1 = 0.75
+		self.eta2 = 0.95
 		self.eta3 = 0.75
 		self.eta4 = 2
 		self.gamma1 = 1
@@ -45,6 +45,7 @@ class ARCLSR1(object):
 		self.tau3 = 0.6
 		self.verbose = verbose
 		self.eps = 1e-8
+		self.iters = 0
 
 
 	def flatten(self, value):
@@ -77,14 +78,10 @@ class ARCLSR1(object):
 			model.zero_grad()
 			loss.backward(retain_graph=True)
 			grads = self.gather_flat_grad(model)
+			self.iters+=1
 			if torch.norm(grads)<self.eps or torch.norm(grads).isnan():
 				break
 
-			if self.verbose:
-				print('------------------------------------------------------------')
-				print('Iteration: {} Loss: {} Gradient norm: {} '.format(it, loss.item(), torch.norm(self.gather_flat_grad(model))))
-				print('Mu: {} rhok: {} gamma: {}'.format(self.mu, self.rhok, self.gamma))
-				print('------------------------------------------------------------')
 			if self.first:
 				t = min(1., 1./grads.abs().sum())
 				sstar = -t*grads
@@ -131,8 +128,8 @@ class ARCLSR1(object):
 			grads = self.gather_flat_grad(model)
 
 
+			y = grads - self.prev_flat_grad
 			if flag:
-				y = grads - self.prev_flat_grad
 				if self.first:
 					self.S = sstar.unsqueeze(1)
 					self.Y = y.unsqueeze(1)
@@ -156,6 +153,12 @@ class ARCLSR1(object):
 					self.Y = torch.cat([self.Y[:,1:], y.unsqueeze(1)], axis=1)
 
 			self.prev_flat_grad = grads
+
+			if self.verbose:
+				print('------------------------------------------------------------')
+				print('Iteration: {} Loss: {} Gradient norm: {} '.format(self.iters, loss.item(), torch.norm(self.gather_flat_grad(model))))
+				print('Mu: {} rhok: {} gamma: {}'.format(self.mu, self.rhok, self.gamma))
+				print('------------------------------------------------------------')
 		
 	
 		return loss
@@ -180,10 +183,13 @@ class ARCLSR1(object):
 
 		Psi = Y - self.gamma*S
 		PsiPsi = Psi.T @ Psi
-		R=torch.linalg.cholesky(PsiPsi.transpose(-2,-1).conj()).transpose(-2,-1).conj()
-		Q = Psi @ torch.inverse(R)
-		if R.detach().any().isnan():
-			set_trace()
+		try:
+			R=torch.linalg.cholesky(PsiPsi.transpose(-2,-1).conj()).transpose(-2,-1).conj()
+			Q = Psi @ torch.inverse(R)
+			if R.detach().any().isnan():
+				set_trace()
+		except:
+			Q,R = torch.linalg.qr(PsiPsi)
 
 		invM = torch.tril(SY) + torch.tril(SY, -1).T - self.gamma*SS
 		invM = 0.5*(invM + invM.T)
