@@ -1,6 +1,7 @@
 import argparse
 from itertools import count
 
+
 import gym
 import scipy.optimize
 
