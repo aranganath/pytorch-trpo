@@ -23,9 +23,6 @@ import matplotlib.pyplot as plt
 torch.set_default_tensor_type('torch.cuda.DoubleTensor')
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-optimize = ARCLSR1(maxhist = 10, maxiters = 20, verbose=True)
-
-
 parser = argparse.ArgumentParser(description='PyTorch actor-critic example')
 parser.add_argument('--gamma', type=float, default=0.995, metavar='G',
                     help='discount factor (default: 0.995)')
@@ -119,9 +116,9 @@ def update_params(batch, policy_net, value_net):
         action_loss1 = Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
         # print('Ratio: {}'.format(torch.exp(log_prob - Variable(fixed_log_prob))[torch.exp(log_prob - Variable(fixed_log_prob))<0]))
         eps = 0.2
-        action_loss2 = Variable(advantages) * torch.clip(torch.exp(log_prob - Variable(fixed_log_prob)), max=2)
-        action_loss = torch.min(action_loss1, action_loss2)
-        return -action_loss.mean()
+        action_loss2 = Variable(advantages) * torch.clip(torch.exp(log_prob - Variable(fixed_log_prob)), min=1-eps, max=1+eps)
+        action_loss = -torch.min(action_loss1, action_loss2)
+        return action_loss.mean()
 
 
     def get_kl():
@@ -140,8 +137,11 @@ def update_params(batch, policy_net, value_net):
         trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
 
 
-envs = ['Ant-v2']
-opts = ['ARCLSR1', 'trpo']
+envs = ['HumanoidStandup-v2']
+opts = ['ARCLSR1']
+
+optimize = ARCLSR1(maxhist = 2, maxiters = 2, verbose=True)
+
 
 for environment in envs:
     for opt in opts:
@@ -162,7 +162,7 @@ for environment in envs:
         running_state = ZFilter((num_inputs,), clip=5)
         running_reward = ZFilter((1,), demean=False, clip=10)
 
-        episodes = 1000
+        episodes = 500
 
         for i_episode in count(1):
             memory = Memory()

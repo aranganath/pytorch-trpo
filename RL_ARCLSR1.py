@@ -24,8 +24,8 @@ class ARCLSR1(object):
 		self.first = True
 		self.mu = 1e3
 		
-		self.eta1 = 0.75
-		self.eta2 = 0.95
+		self.eta1 = 0.70
+		self.eta2 = 0.85
 		self.eta3 = 0.75
 		self.eta4 = 2
 		self.gamma1 = 1
@@ -93,7 +93,6 @@ class ARCLSR1(object):
 				flag = True
 
 			else:
-				# We have one step. let's use it
 				D, g_parallel, C_parallel, U_par, alphastar, sstar, pflag = self.LSR1(self.S, self.SS, self.YY, self.SY, self.Y, grads)
 				if sstar.any().isnan():
 					break
@@ -189,7 +188,7 @@ class ARCLSR1(object):
 			if R.detach().any().isnan():
 				set_trace()
 		except:
-			Q,R = torch.linalg.qr(PsiPsi)
+			Q,R = torch.linalg.qr(Psi)
 
 		invM = torch.tril(SY) + torch.tril(SY, -1).T - self.gamma*SS
 		invM = 0.5*(invM + invM.T)
@@ -202,7 +201,7 @@ class ARCLSR1(object):
 
 		RMR = 0.5*(RMR + RMR.T)
 		D,P = torch.linalg.eigh(RMR)
-		U_par = Q.detach() @ P.detach()
+		U_par = Q @ P
 		if len(U_par.shape)==1:
 			U_par = U_par.unsqueeze(1)
 
@@ -226,7 +225,7 @@ class ARCLSR1(object):
 		C_parallel = torch.diag(torch.stack(C_parallel).reshape(-1))
 
 
-		if torch.norm(gperp) < 1e-8:
+		if torch.norm(gperp) < 1e-15:
 			#The solution only depends on sstar_parallel
 			sstar_parallel = -C_parallel @ g_parallel
 			sstar =  U_par @ sstar_parallel
@@ -260,7 +259,9 @@ class ARCLSR1(object):
 		set_flat_params_to(model, x_init)
 		return (f1 - f2)/(-m)
 
-	
+	def linesearch(self, theta, f, sstar):
+		
+		return theta
 
 
 	def cubicReg(self, D, g_parallel, C_parallel, g, U_par, alphastar, sstar, closure, model, pflag):
