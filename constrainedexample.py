@@ -29,7 +29,7 @@ def optimization(x, w, lamb, mu):
 	gamma = mu/w - lamb
 	dx = torch.inverse(N) @ (A.unsqueeze(1)*((lamb/w)*constraint(x,lamb,w) + gamma)-sigma)
 	dlamb = - (mu/w**2)*(x[0]+ 2*x[1] - w - 4 - A.unsqueeze(1).T @ dx - w**2/mu*lamb + w)
-	dw = (w/lamb)*(lamb - dlamb)
+	dw = (w**2/lamb)*(lamb - dlamb)
 	return dx, dw, dlamb
 
 
