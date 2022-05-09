@@ -9,13 +9,13 @@ import torch
 lamb = 2
 #Define the function
 torchrosenbrock = lambda x: torch.sum((1. - x[0])**2 + (x[1] - x[0]**2)**2) 
-torchradconstraint =  lambda x: x[2]*(4-(x[0]**2 + x[1]**2) - x[3])
+torchradconstraint =  lambda x: x[2]*(0.25-(x[0]**2 + x[1]**2) - x[3])
 torchbarrier = lambda x: 10.0*torch.log(x[3])
 torchfunc = lambda x: torchrosenbrock(x) + torchradconstraint(x) - torchbarrier(x)
 
 nprosenbrock = lambda x: np.sum((1. - x[0])**2 + (x[1] - x[0]**2)**2) 
 npradconstraint =  lambda x: x[2]*(4-(x[0]**2 + x[1]**2) - x[3])
-npbarrier = lambda x: 1e-5*np.log(x[3])
+npbarrier = lambda x: 1e-10*np.log(np.abs(x[3]))
 npfunc = lambda x: nprosenbrock(x) + npradconstraint(x) - nplogbarrier(x)
 
 
@@ -45,10 +45,17 @@ def linesearch(x, sol, func):
 	# Check if the linesearch sufficicently reduces the funciton
 	# Take the step if it does
 	merit = lambda x: nprosenbrock(x) - npbarrier(x)
-	if merit(x+sol) < merit(x):
-		x = x+sol
+	alpha = 0.9
+	max_iters = 10
+	i=0
+	while merit(x+sol) >= merit(x) and i < max_iters:
+		sol*=alpha
+		i+=1
 
-	return x
+	if i < max_iters:
+		return x + sol
+	else:
+		return x
 
 
 # torchN, torchgrads = torchN(torch.tensor([10.0,10.0, 2.0,4.0], requires_grad=True))
@@ -57,7 +64,7 @@ def linesearch(x, sol, func):
 # torchsol = -torch.inverse(torchN) @ torchgrads
 # npsol = -np.linalg.inv(npN) @ npgrads
 
-start = np.array([10.0,10.0, 2.0,1.269579])
+start = np.array([100.0,100.0,2.0,1.269579])
 
 for i in range(20):
 	sol = npN(start)
