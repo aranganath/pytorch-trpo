@@ -6,16 +6,19 @@ import numpy as np
 import torch
 
 
-lamb = 2
+delta = 20.
+mu = 20.
+
+
 #Define the function
 torchrosenbrock = lambda x: torch.sum((1. - x[0])**2 + (x[1] - x[0]**2)**2) 
-torchradconstraint =  lambda x: x[2]*(0.25-(x[0]**2 + x[1]**2) - x[3])
+torchradconstraint =  lambda x: x[2]*(1-(x[0]**2 + x[1]**2) - x[3])
 torchbarrier = lambda x: 10.0*torch.log(x[3])
 torchfunc = lambda x: torchrosenbrock(x) + torchradconstraint(x) - torchbarrier(x)
 
-nprosenbrock = lambda x: np.sum((1. - x[0])**2 + (x[1] - x[0]**2)**2) 
-npradconstraint =  lambda x: x[2]*(4-(x[0]**2 + x[1]**2) - x[3])
-npbarrier = lambda x: 1e-10*np.log(np.abs(x[3]))
+nprosenbrock = lambda x: np.sum((1. - x[0])**2 + (x[1] - x[0]**2)**2)
+npradconstraint =  lambda x: x[2]*(delta-(x[0]**2 + x[1]**2) - x[3])
+npbarrier = lambda x: mu*np.log(x[3])
 npfunc = lambda x: nprosenbrock(x) + npradconstraint(x) - nplogbarrier(x)
 
 
@@ -49,7 +52,10 @@ def linesearch(x, sol, func):
 	max_iters = 10
 	i=0
 	while merit(x+sol) >= merit(x) and i < max_iters:
+		from pdb import set_trace
+		set_trace()
 		sol*=alpha
+		print(merit(x+sol))
 		i+=1
 
 	if i < max_iters:
@@ -64,9 +70,9 @@ def linesearch(x, sol, func):
 # torchsol = -torch.inverse(torchN) @ torchgrads
 # npsol = -np.linalg.inv(npN) @ npgrads
 
-start = np.array([100.0,100.0,2.0,1.269579])
+start = np.array([0.0,0.0,2.0,1.])
 
-for i in range(20):
+for i in range(10):
 	sol = npN(start)
 	print(start)
 	start = linesearch(start, sol, npfunc)
