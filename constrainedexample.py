@@ -6,8 +6,8 @@ import numpy as np
 import torch
 
 
-delta = 2
-mu = 1e-2
+delta = 3
+mu = 1e-8
 
 
 #Numpy
@@ -17,7 +17,7 @@ npbarrier = lambda x: mu*np.log(x[3])
 npfunc = lambda x: nprosenbrock(x) + npradconstraint(x) - nplogbarrier(x)
 
 #Torch
-torchrosenbrock = lambda x: torch.sum((1. - x[0])**2 + (x[1] - x[0]**2)**2) 
+torchrosenbrock = lambda x: torch.sum((1. - x[0])**2 + (x[1] - x[0]**2)**2)
 torchradconstraint =  lambda x: x[2]*(delta**2-(x[0]**2 + x[1]**2) - x[3])
 torchbarrier = lambda x: mu*torch.log(x[3])
 torchfunc = lambda x: torchrosenbrock(x) + torchradconstraint(x) - torchbarrier(x)
@@ -46,7 +46,7 @@ def numpylinesearch(x, sol, func):
 	# Check if the linesearch sufficicently reduces the funciton
 	# Take the step if it does
 	merit = lambda x: nprosenbrock(x) - npbarrier(x)
-	alpha = 0.9999
+	alpha =1
 	max_iters = 20
 	i=0
 	while merit(x+sol) >= merit(x) and i < max_iters:
@@ -64,13 +64,14 @@ def torchlinesearch(x, sol, func):
 	# Take the step if it does
 	# merit = lambda x: torchrosenbrock(x) - torchbarrier(x)
 	merit = lambda x: torchfunc(x)
-	alpha = 0.9999
 	max_iters = 20
 	i=0
 	from pdb import set_trace
 	set_trace()
 	while merit(x+sol) >= merit(x) and i < max_iters:
+		global mu, alpha
 		sol*=alpha
+		mu*=alpha2
 		i+=1
 
 	if i < max_iters:
@@ -82,14 +83,14 @@ def torchlinesearch(x, sol, func):
 # start = np.array([0.0,0.0,2.0,1.0])
 start = torch.tensor([0.,0.,1e-2,1e2], requires_grad=True)
 print(start.data)
-alpha = 1.2
+alpha = 0.9
+alpha2 = 1
 for i in range(10):
 	sol = torchN(start)
 	start = torchlinesearch(start, sol, npfunc)
-	mu *= alpha
 	print(start.data)
 	print('mu:', mu)
-	print('functional value:', torchfunc(start))
+	print('functional value:', torchfunc(start).data)
 
 # Trash
 
