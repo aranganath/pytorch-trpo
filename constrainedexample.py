@@ -7,6 +7,8 @@ import torch
 import pickle as pkl
 import argparse
 
+parser = argparse.ArgumentParser()
+
 
 # Torch
 # define the rosenbrock function
