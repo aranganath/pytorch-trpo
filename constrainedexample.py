@@ -5,10 +5,8 @@
 import numpy as np
 import torch
 import pickle as pkl
+import argparse
 
-
-delta = 10**3
-mu = 1e-10
 
 # Torch
 # define the rosenbrock function
@@ -36,7 +34,7 @@ def torchlinesearch(x, sol, func):
 	# Take the step if it does
 	# merit = lambda x: torchrosenbrock(x) - torchbarrier(x)
 	merit = lambda x: torchfunc(x)
-	max_iters = 10
+	ls_iters = 10
 	i=0
 	alpha = 1
 	grad = torch.autograd.grad(torchfunc(x), inputs=x)[0]
@@ -45,43 +43,47 @@ def torchlinesearch(x, sol, func):
 	c2 = 0.5
 	# from pdb import set_trace
 	# set_trace()
-	while i < max_iters and torchfunc(x+ alpha*sol)<= torchfunc(x) + c1*alpha*grad.dot(sol) and grad.dot(sol)>=c2*grad.dot(sol):
+	while i < ls_iters and torchfunc(x+ alpha*sol)<= torchfunc(x) + c1*alpha*grad.dot(sol) and grad.dot(sol)>=c2*grad.dot(sol):
 		alpha = 0.9*alpha
 		i+=1
 
-	if i < max_iters:
-		print('Used line search')
-		return x + alpha*sol
+	if i < ls_iters:
+		return True, x + alpha*sol
 	else:
-		return x
+		return False, x
 
-
-class optimizer(object):
-	"""This class will optimizer any objective function provided to it
-	Parameters:
-
-
-	"""
-	def __init__(self, arg):
-		super(optimizer, self).__init__()
-		self.arg = arg
-		
-
-
-iterates = []
-start = torch.tensor([3.,3.,1e-2,1], requires_grad=True)
-print(start.data.numpy())
-iterates.append(start.data.numpy())
-for i in range(10):
-	sol = torchsolution(start)
-	start = torchlinesearch(start, sol, torchfunc)
-	iterates.append(start.data.numpy())
+def prettyprint(delta, mu, func_val, start, iteration, flag):
 	print(start.data)
-	print('mu:', mu)
-	print('functional value:', torchfunc(start).data)
-
-with open('./rosenbrockresults/raw/path.pkl', 'wb') as file:
-	print('Results saved to ./rosenbrockresults/raw/path.pkl')
-	pkl.dump(iterates, file, protocol=pkl.HIGHEST_PROTOCOL)
+	
+	print('Iteration:'+str(iteration)+'\t functional value:'+str(torchfunc(start).data)+'\n')
+	print('mu:'+str(mu)+'\t Used line-search:'+str(flag))
 
 
+
+if __name__ == '__main__':
+	parser = argparse.ArgumentParser()
+	parser.add_argument('--delta', type=float, default=2.0)
+	parser.add_argument('--mu', type=float, default=2.0)
+	parser.add_argument('--max-iters', type=int, default=10)
+	parser.add_argument('--line-search-iters', type=int, default=10)
+	parser.add_argument('--save', type=bool, default=False)
+	parser.add_argument('--location', type=str, default='./rosenbrockresults/raw/path.pkl')
+	args = parser.parse_args()
+	delta = args.delta
+	max_iters = args.max_iters
+	mu = args.mu
+	iterates = []
+	start = torch.tensor([3.,3.,1e-2,1], requires_grad=True)
+	print(start.data.numpy())
+	iterates.append(start.data.numpy())
+	for i in range(max_iters):
+		sol = torchsolution(start)
+		flag, start = torchlinesearch(start, sol, torchfunc)
+		iterates.append(start.data.numpy())
+		func_val = torchfunc(start).data
+		prettyprint(delta, args.mu, func_val, start, i, flag)
+
+	if args.save:
+		with open(location, 'wb') as file:
+			print('Results saved to ' + args.save)
+			pkl.dump(iterates, file, protocol=pkl.HIGHEST_PROTOCOL)
