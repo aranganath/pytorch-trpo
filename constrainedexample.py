@@ -5,10 +5,12 @@
 import numpy as np
 import torch
 import pickle as pkl
+import argparse
 
+parser = argparse.ArgumentParser()
 
-delta = 10**3
-mu = 1e-10
+delta = 100
+mu = 1e-2
 
 # Torch
 # define the rosenbrock function
@@ -54,25 +56,14 @@ def torchlinesearch(x, sol, func):
 		return x + alpha*sol
 	else:
 		return x
-
-
-class optimizer(object):
-	"""This class will optimizer any objective function provided to it
-	Parameters:
-
-
-	"""
-	def __init__(self, arg):
-		super(optimizer, self).__init__()
-		self.arg = arg
 		
 
 
 iterates = []
-start = torch.tensor([3.,3.,1e-2,1], requires_grad=True)
+start = torch.tensor([3000.,3000.,1e-2,1], requires_grad=True)
 print(start.data.numpy())
 iterates.append(start.data.numpy())
-for i in range(10):
+for i in range(5):
 	sol = torchsolution(start)
 	start = torchlinesearch(start, sol, torchfunc)
 	iterates.append(start.data.numpy())
