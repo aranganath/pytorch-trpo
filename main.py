@@ -13,6 +13,7 @@ from torch.autograd import Variable
 from trpo import trpo_step
 from utils import *
 from RL_ARCLSR1 import ARCLSR1
+from InteriorPointMethod import InteriorPointMethod
 torch.utils.backcompat.broadcast_warning.enabled = True
 torch.utils.backcompat.keepdim_warning.enabled = True
 import pickle as pkl
@@ -132,16 +133,21 @@ def update_params(batch, policy_net, value_net):
         return kl.sum(1, keepdim=True)
 
     if opt =='ARCLSR1':
-        optimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping, environment)
+        ARCLSR1optimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping, environment)
 
     if opt =='trpo':
         trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
+
+    if opt == 'InteriorPointMethod':
+        InteriorOptimize.computeStep(policy_net, get_loss, get_kl)
+
 
 
 envs = ['HumanoidStandup-v2']
 opts = ['ARCLSR1']
 
-optimize = ARCLSR1(maxhist = 2, maxiters = 2, verbose=True)
+ARCLSR1optimize = ARCLSR1(maxhist = 2, maxiters = 2, verbose=True)
+InteriorOptimize = InteriorPointMethod(maxiters=2, maxhist=2, method='LBFGS')
 
 
 for environment in envs:
