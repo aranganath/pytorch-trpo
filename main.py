@@ -59,7 +59,7 @@ def update_params(batch, policy_net, value_net):
     rewards = torch.Tensor(batch.reward)
     masks = torch.Tensor(batch.mask)
     actions = torch.Tensor(np.concatenate(batch.action, 0))
-    states = torch.Tensor(batch.state)
+    states = torch.Tensor(np.array(batch.state))
     values = value_net(Variable(states))
 
     returns = torch.Tensor(actions.size(0),1)
@@ -123,14 +123,27 @@ def update_params(batch, policy_net, value_net):
         return action_loss.mean()
 
 
-    def get_kl():
-        mean1, log_std1, std1 = policy_net(Variable(states))
+    def get_kl(theta, model):
+        curr_params = get_flat_params_from(model)
 
-        mean0 = Variable(mean1.data)
-        log_std0 = Variable(log_std1.data)
-        std0 = Variable(std1.data)
+        set_flat_params_to(policy_net, theta)
+        
+        mean0, log_std0, std0 = policy_net(states)
+        
+        set_flat_params_to(policy_net, curr_params)
+
+        mean1, log_std1, std1 = policy_net(Variable(states))
         kl = log_std1 - log_std0 + (std0.pow(2) + (mean0 - mean1).pow(2)) / (2.0 * std1.pow(2)) - 0.5
         return kl.sum(1, keepdim=True)
+
+    # def get_kl():
+    #     mean1, log_std1, std1 = policy_net(Variable(states))
+
+    #     mean0 = Variable(mean1.data)
+    #     log_std0 = Variable(log_std1.data)
+    #     std0 = Variable(std1.data)
+    #     kl = log_std1 - log_std0 + (std0.pow(2) + (mean0 - mean1).pow(2)) / (2.0 * std1.pow(2)) - 0.5
+    #     return kl.sum(1, keepdim=True)
 
     if opt =='ARCLSR1':
         ARCLSR1optimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping, environment)
@@ -139,15 +152,15 @@ def update_params(batch, policy_net, value_net):
         trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
 
     if opt == 'InteriorPointMethod':
-        InteriorOptimize.computeStep(policy_net, get_loss, get_kl)
+        InteriorOptimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping, environment)
 
 
 
-envs = ['HumanoidStandup-v2']
-opts = ['ARCLSR1']
+envs = ['HumanoidStandup-v4']
+opts = ['InteriorPointMethod']
 
 ARCLSR1optimize = ARCLSR1(maxhist = 2, maxiters = 2, verbose=True)
-InteriorOptimize = InteriorPointMethod(maxiters=2, maxhist=2, method='LBFGS')
+InteriorOptimize = InteriorPointMethod(maxiters=5, maxhist=5, verbose=True)
 
 
 for environment in envs:
@@ -158,7 +171,7 @@ for environment in envs:
         num_inputs = env.observation_space.shape[0]
         num_actions = env.action_space.shape[0]
 
-        env.seed(args.seed)
+        env.reset()
         torch.manual_seed(args.seed)
 
         policy_net = Policy(num_inputs, num_actions).to(device)
@@ -179,14 +192,14 @@ for environment in envs:
             num_episodes = 0
             while num_steps < args.batch_size:
                 state = env.reset()
-                state = running_state(state)
+                state = running_state(state[0])
 
                 reward_sum = 0
                 for t in range(10000): # Don't infinite loop while learning
                     action = select_action(state, policy_net, value_net)
                     action = action.data[0].cpu().numpy()
                     #time.sleep(0.002)
-                    next_state, reward, done, _ = env.step(action)
+                    next_state, reward, done, _, _ = env.step(action)
                     reward_sum += reward
 
                     next_state = running_state(next_state)
