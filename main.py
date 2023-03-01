@@ -102,48 +102,30 @@ def update_params(batch, policy_net, value_net):
 
     advantages = (advantages - advantages.mean()) / advantages.std()
 
-    action_means, action_log_stds, action_stds = policy_net(Variable(states))
+    action_means, action_log_stds, action_stds = policy_net(states)
     fixed_log_prob = normal_log_density(Variable(actions), action_means, action_log_stds, action_stds).data.clone()
 
     def get_loss(volatile=False):
         if volatile:
             with torch.no_grad():
-                action_means, action_log_stds, action_stds = policy_net(Variable(states))
+                action_means, action_log_stds, action_stds = policy_net(states)
         else:
-            action_means, action_log_stds, action_stds = policy_net(Variable(states))
+            action_means, action_log_stds, action_stds = policy_net(states)
 
         log_prob = normal_log_density(Variable(actions), action_means, action_log_stds, action_stds)
-        # Original trpo loss function
-        # action_loss = -Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
-        action_loss1 = Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
-        # print('Ratio: {}'.format(torch.exp(log_prob - Variable(fixed_log_prob))[torch.exp(log_prob - Variable(fixed_log_prob))<0]))
-        eps = 0.2
-        action_loss2 = Variable(advantages) * torch.clip(torch.exp(log_prob - Variable(fixed_log_prob)), min=1-eps, max=1+eps)
-        action_loss = -torch.min(action_loss1, action_loss2)
+        action_loss = -Variable(advantages) * torch.exp(log_prob - Variable(fixed_log_prob))
         return action_loss.mean()
 
 
-    def get_kl(theta, model):
-        curr_params = get_flat_params_from(model)
-
-        set_flat_params_to(policy_net, theta)
+    def get_kl():
         
         mean0, log_std0, std0 = policy_net(states)
+        mean1 = Variable(mean0)
+        log_std1 = Variable(log_std0)
+        std1 = Variable(std0)
         
-        set_flat_params_to(policy_net, curr_params)
-
-        mean1, log_std1, std1 = policy_net(Variable(states))
         kl = log_std1 - log_std0 + (std0.pow(2) + (mean0 - mean1).pow(2)) / (2.0 * std1.pow(2)) - 0.5
         return kl.sum(1, keepdim=True)
-
-    # def get_kl():
-    #     mean1, log_std1, std1 = policy_net(Variable(states))
-
-    #     mean0 = Variable(mean1.data)
-    #     log_std0 = Variable(log_std1.data)
-    #     std0 = Variable(std1.data)
-    #     kl = log_std1 - log_std0 + (std0.pow(2) + (mean0 - mean1).pow(2)) / (2.0 * std1.pow(2)) - 0.5
-    #     return kl.sum(1, keepdim=True)
 
     if opt =='ARCLSR1':
         ARCLSR1optimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping, environment)
@@ -152,15 +134,15 @@ def update_params(batch, policy_net, value_net):
         trpo_step(policy_net, get_loss, get_kl, args.max_kl, args.damping)
 
     if opt == 'InteriorPointMethod':
-        InteriorOptimize.arclsr1(policy_net, get_loss, get_kl, args.max_kl, args.damping, environment)
+        InteriorOptimize.lbfgs(policy_net, get_loss, get_kl, args.max_kl, args.damping, environment)
 
 
 
-envs = ['HumanoidStandup-v4']
+envs = ['InvertedDoublePendulum-v4']
 opts = ['InteriorPointMethod']
 
-ARCLSR1optimize = ARCLSR1(maxhist = 2, maxiters = 2, verbose=True)
-InteriorOptimize = InteriorPointMethod(maxiters=5, maxhist=5, verbose=True)
+# ARCLSR1optimize = ARCLSR1(maxhist = 2, maxiters = 2, verbose=True)
+InteriorOptimize = InteriorPointMethod(maxiters=10, maxhist=10, verbose=True)
 
 
 for environment in envs:
