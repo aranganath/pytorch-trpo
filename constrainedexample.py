@@ -41,14 +41,14 @@ def getHessianPD(x,z,s, A_I, invSigma):
 	d2L_dt2 = torch.autograd.functional.hessian(torchfunc, (x,z,s))[0][0]
 	
 	upper = torch.hstack([d2L_dt2, A_I.unsqueeze(1)])
-	lower = torch.hstack([A_I.unsqueeze(1).T, invSigma.unsqueeze(1)])
+	lower = torch.hstack([A_I.unsqueeze(1).T, -invSigma.unsqueeze(1)])
 	RedHess = torch.vstack([upper,lower])
 
 	return RedHess
 	
 
 
-def getGradient(f, c, s, t, z, A_I):
+def getGradient(f, c, s, x, z, A_I):
 	'''
 	Computes the Hessian of torchfunc using the primal-dual system
 	Inputs:
@@ -62,10 +62,10 @@ def getGradient(f, c, s, t, z, A_I):
 	'''
 
 	# \nabla_x f
-	df_dt = torch.autograd.grad(f(t), t)[0]
+	df_dt = torch.autograd.grad(f(x), x)[0]
 	
 	upper = df_dt - z*A_I
-	lower = c(t,s) - mu/z 
+	lower = c(x,s) - mu/z 
 	RedGrad = torch.vstack([upper.unsqueeze(1),lower.unsqueeze(1)])
 	return RedGrad
 
@@ -112,6 +112,8 @@ def getSMW(A, v):
 	
 	# First let's compute the inverse of the matrix since it can be re-used multiple times.
 	# Also the dot product between InvMat and v
+
+	
 	InvMat = tl.inv(matrix)
 	InvMatdotv = InvMat.dot(v)
 	
@@ -130,7 +132,7 @@ def prettyprint(delta, mu, func_val, start, iteration):
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--delta', type=float, default=2.0)
-	parser.add_argument('--mu', type=float, default=10.0)
+	parser.add_argument('--mu', type=float, default=1.0)
 	parser.add_argument('--max-iters', type=int, default=100)
 	parser.add_argument('--line-search-iters', type=int, default=10)
 	parser.add_argument('--save', type=bool, default=False)
@@ -141,17 +143,17 @@ if __name__ == '__main__':
 	mu = args.mu
 	iterates = []
 	sol = torch.tensor([-1.,1.], requires_grad=True)
-	s = torch.tensor([5.])
-	z = torch.tensor([1e3], requires_grad=True)
+	s = torch.tensor([100.])
+	z = torch.tensor([1.], requires_grad=True)
 	iterates.append(sol.data.numpy())
 	for i in range(max_iters):
-		px, ps, pz = torchsolution(sol,s, z)
+		px, ps, pz = torchsolution(sol,z, s)
 		with torch.no_grad():
 			sol += px.data
 			s += ps.data
 			z += pz.data
 		iterates.append(sol.data.numpy())
-		mu*=0.9
+		mu*=0.99
 		func_val = torchrosenbrock(sol).data
 		prettyprint(delta, mu, func_val, sol, i)
 
