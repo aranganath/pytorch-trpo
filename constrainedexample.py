@@ -39,16 +39,15 @@ def getHessianPD(x,z,s, A_I, invSigma):
 
 	'''
 	d2L_dt2 = torch.autograd.functional.hessian(torchfunc, (x,z,s))[0][0]
-	
-	upper = torch.hstack([d2L_dt2, A_I.unsqueeze(1)])
-	lower = torch.hstack([A_I.unsqueeze(1).T, -invSigma.unsqueeze(1)])
-	RedHess = torch.vstack([upper,lower])
 
+	AAT = 1/invSigma*A_I.outer(A_I)
+	
+	RedHess = d2L_dt2 + AAT
 	return RedHess
 	
 
 
-def getGradient(f, c, s, x, z, A_I):
+def getGradient(f, c, s, x, z, A_I, invSigma):
 	'''
 	Computes the Hessian of torchfunc using the primal-dual system
 	Inputs:
@@ -63,11 +62,8 @@ def getGradient(f, c, s, x, z, A_I):
 
 	# \nabla_x f
 	df_dt = torch.autograd.grad(f(x), x)[0]
-	
-	upper = df_dt - z*A_I
-	lower = c(x,s) - mu/z 
-	RedGrad = torch.vstack([upper.unsqueeze(1),lower.unsqueeze(1)])
-	return RedGrad
+	RHS = -(df_dt - A_I*z) + 1/invSigma*A_I *(c(x,s) - mu/z)
+	return RHS
 
 def torchsolution(x,z,s):
 	'''
@@ -84,14 +80,16 @@ def torchsolution(x,z,s):
 	RedHess = getHessianPD(x, z, s, A_I, invSigma)
 
 	# Compute the corresponding gradient
-	RedGrad = getGradient(torchrosenbrock, torchconstraint, s, x, z, A_I)
+	RedGrad = getGradient(torchrosenbrock, torchconstraint, s, x, z, A_I, invSigma)
 	
-	# Compute the step for the reduced system
-	pxpz = -torch.linalg.inv(RedHess) @ RedGrad
+	# Solve for 'x'
+	set_trace()
+	px = torch.linalg.inv(RedHess) @ RedGrad
 
-	# Separate out the solution between px,pz and solve for ps
-	px = pxpz[:x.shape[0]].squeeze(1)
-	pz = pxpz[x.shape[0]]
+	# Solve for 'z'
+	pz = 1/invSigma*(torchconstraint(x,s) - mu/z - A_I.dot(px))
+	
+	# Solve for 's'
 	ps = s - mu/z - invSigma*pz
 
 	return px, ps, pz
@@ -113,7 +111,7 @@ def getSMW(A, v):
 	# First let's compute the inverse of the matrix since it can be re-used multiple times.
 	# Also the dot product between InvMat and v
 
-	
+
 	InvMat = tl.inv(matrix)
 	InvMatdotv = InvMat.dot(v)
 	
@@ -144,7 +142,7 @@ if __name__ == '__main__':
 	iterates = []
 	sol = torch.tensor([-1.,1.], requires_grad=True)
 	s = torch.tensor([100.])
-	z = torch.tensor([1.], requires_grad=True)
+	z = torch.tensor([1e3])
 	iterates.append(sol.data.numpy())
 	for i in range(max_iters):
 		px, ps, pz = torchsolution(sol,z, s)
@@ -153,7 +151,7 @@ if __name__ == '__main__':
 			s += ps.data
 			z += pz.data
 		iterates.append(sol.data.numpy())
-		mu*=0.99
+		mu*=0.1
 		func_val = torchrosenbrock(sol).data
 		prettyprint(delta, mu, func_val, sol, i)
 
