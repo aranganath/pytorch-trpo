@@ -21,10 +21,10 @@ torchrosenbrock = lambda x: 100*(x[1] - x[0]**2)**2 + (1 - x[0])**2
 torchconstraint =  lambda x,s: (x[0]**2 + x[1]**2 - s)
 
 # Define log barrier
-torchbarrier = lambda x: torch.log(s)
+torchbarrier = lambda s: torch.log(s)
 
 #Define the optimization problem
-torchfunc = lambda x,s,z: torchrosenbrock(x) - z*torchconstraint(x, s) - mu*torchbarrier(x)
+torchfunc = lambda x,s,z: torchrosenbrock(x) - z*torchconstraint(x, s) - mu*torchbarrier(s)
 
 def getHessianPD(x,z,s, A_I, invSigma):
 	'''
@@ -38,7 +38,7 @@ def getHessianPD(x,z,s, A_I, invSigma):
 		InvHessian: Inverse of the primal-dual system matrix
 
 	'''
-	d2L_dt2 = torch.autograd.functional.hessian(torchfunc, (x,z,s))[0][0]
+	d2L_dt2 = torch.autograd.functional.hessian(torchfunc, (x,s,z))[0][0]
 
 	AAT = 1/invSigma*A_I.outer(A_I)
 	
@@ -62,7 +62,7 @@ def getGradient(f, c, s, x, z, A_I, invSigma):
 
 	# \nabla_x f
 	df_dt = torch.autograd.grad(f(x), x)[0]
-	RHS = -(df_dt - A_I*z) + 1/invSigma*A_I *(c(x,s) - mu/z)
+	RHS = -(df_dt - A_I*z) + 1/invSigma*A_I*(c(x,s) - mu/z)
 	return RHS
 
 def torchsolution(x,z,s):
@@ -83,14 +83,13 @@ def torchsolution(x,z,s):
 	RedGrad = getGradient(torchrosenbrock, torchconstraint, s, x, z, A_I, invSigma)
 	
 	# Solve for 'x'
-	set_trace()
 	px = torch.linalg.inv(RedHess) @ RedGrad
 
 	# Solve for 'z'
 	pz = 1/invSigma*(torchconstraint(x,s) - mu/z - A_I.dot(px))
 	
 	# Solve for 's'
-	ps = s - mu/z - invSigma*pz
+	ps = mu/z - s - invSigma*pz
 
 	return px, ps, pz
 
@@ -131,7 +130,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--delta', type=float, default=2.0)
 	parser.add_argument('--mu', type=float, default=1.0)
-	parser.add_argument('--max-iters', type=int, default=100)
+	parser.add_argument('--max-iters', type=int, default=20)
 	parser.add_argument('--line-search-iters', type=int, default=10)
 	parser.add_argument('--save', type=bool, default=False)
 	parser.add_argument('--location', type=str, default='./rosenbrockresults/raw/path.pkl')
