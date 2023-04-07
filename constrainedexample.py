@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser()
 torchrosenbrock = lambda x: 100*(x[1] - x[0]**2)**2 + (1 - x[0])**2
 
 # Define the constraint
-torchconstraint =  lambda x,s: (x[0]**2 + x[1]**2 - s)
+torchconstraint =  lambda x,s: (torch.norm(x[:2]) - s)
 
 # Define log barrier
 torchbarrier = lambda s: torch.log(s)
@@ -141,7 +141,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--delta', type=float, default=2.0)
 	parser.add_argument('--mu', type=float, default=1.0)
-	parser.add_argument('--max-iters', type=int, default=10)
+	parser.add_argument('--max-iters', type=int, default=20)
 	parser.add_argument('--line-search-iters', type=int, default=10)
 	parser.add_argument('--save', type=bool, default=False)
 	parser.add_argument('--location', type=str, default='./rosenbrockresults/raw/path.pkl')
@@ -150,8 +150,8 @@ if __name__ == '__main__':
 	max_iters = args.max_iters
 	mu = args.mu
 	iterates = []
-	sol = torch.tensor([-10.,10.], requires_grad=True)
-	s = torch.tensor([1000.])
+	sol = torch.tensor([-15.,15.], requires_grad=True)
+	s = torch.tensor([100.])
 	z = torch.tensor([1e6])
 	iterates.append(sol.data.numpy())	
 	for i in range(max_iters):
