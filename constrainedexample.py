@@ -119,10 +119,21 @@ def getSMW(A, v):
 
 	return InvMatOut
 
-def prettyprint(delta, mu, func_val, start, iteration):
+
+
+def prettyprint(delta, mu, func_val, iterate, iteration):
+
+	'''
+	Keeps stdout neat
+	Input parameters:
+		mu: coefficient of log-barrier
+		iterate: current point
+		func_val: Value of the rosenbrock function at the current point
+		iteration: Iteration Number
+	'''
 	print('Iteration:'+str(iteration)+'\t functional value:'+str(func_val.data.numpy()))
-	print('Iterate:'+str(start.data.numpy())+'\t Iterate radius:' +str(torch.norm(start).data.numpy()))
-	print('z:'+str(z.data)+' mu:'+str(mu)+'\t s:'+str(s[0].data.numpy())+'\n')
+	print('Iterate:'+str(iterate.data.numpy())+'\t Iterate radius:' +str(torch.norm(iterate).data.numpy()))
+	print('z:'+str(z.data.numpy())+' mu:'+str(mu)+'\t s:'+str(s[0].data.numpy())+'\n')
 
 
 
@@ -130,7 +141,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--delta', type=float, default=2.0)
 	parser.add_argument('--mu', type=float, default=1.0)
-	parser.add_argument('--max-iters', type=int, default=20)
+	parser.add_argument('--max-iters', type=int, default=10)
 	parser.add_argument('--line-search-iters', type=int, default=10)
 	parser.add_argument('--save', type=bool, default=False)
 	parser.add_argument('--location', type=str, default='./rosenbrockresults/raw/path.pkl')
@@ -139,22 +150,24 @@ if __name__ == '__main__':
 	max_iters = args.max_iters
 	mu = args.mu
 	iterates = []
-	sol = torch.tensor([-1.,1.], requires_grad=True)
-	s = torch.tensor([100.])
-	z = torch.tensor([1e3])
-	iterates.append(sol.data.numpy())
+	sol = torch.tensor([-10.,10.], requires_grad=True)
+	s = torch.tensor([1000.])
+	z = torch.tensor([1e6])
+	iterates.append(sol.data.numpy())	
 	for i in range(max_iters):
 		px, ps, pz = torchsolution(sol,z, s)
 		with torch.no_grad():
 			sol += px.data
 			s += ps.data
 			z += pz.data
+
 		iterates.append(sol.data.numpy())
 		mu*=0.1
 		func_val = torchrosenbrock(sol).data
 		prettyprint(delta, mu, func_val, sol, i)
 
+
 	if args.save:
-		with open(location, 'wb') as file:
-			print('Results saved to ' + args.save)
+		with open(args.location, 'wb') as file:
+			print('Results saved to ' + args.location)
 			pkl.dump(iterates, file, protocol=pkl.HIGHEST_PROTOCOL)
