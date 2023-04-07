@@ -161,7 +161,8 @@ if __name__ == '__main__':
 			s += ps.data
 			z += pz.data
 
-		iterates.append(sol.data.numpy())
+
+		iterates.append(sol.clone().detach().numpy())
 		mu*=0.1
 		func_val = torchrosenbrock(sol).data
 		prettyprint(delta, mu, func_val, sol, i)
