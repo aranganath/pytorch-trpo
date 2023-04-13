@@ -103,6 +103,9 @@ def torchlinesearch(x, z, s, px, pz, ps, mu):
 		x: input to torchrosenbrock function
 		z: Lagrange multiplier to constraint
 		s: radius
+		px: Step on the primal variables
+		ps: Step on the slack
+		pz: Step on the lagrange multiplier
 
 	Ouput:
 		flag: updated or not
@@ -112,19 +115,21 @@ def torchlinesearch(x, z, s, px, pz, ps, mu):
 	flag = False
 	
 	# Define the merit function
-	nu = 1
+	global nu
 	torchphi = lambda x: torchrosenbrock(x) - mu*torch.log(s) + nu*torch.norm(torchconstraint(x, s))
 	eta = 0.5
 	iters = 0
 	# print('--------------------Line-search----------------')
 	xs = torch.cat([x, s])
 	p = torch.cat([px, ps])
-	while not flag and iters<=num_iters:
+	while not flag and iters<num_iters:
 		
 		D = torch.autograd.grad(torchphi(xs), xs, create_graph=False)[0].dot(alphas*p)
 		
 		if torchphi(xs + alphas*p) <= torchphi(xs) + eta*D*alphas*torchphi(xs):
-			set_trace()
+			with torch.no_grad():
+				x += alphas*p[:2]
+				s += alphas*p[2]
 			flag = True
 			continue
 		# print('phi(x + alphax*px,s + alphas*ps):'+str(torchphi(alphas*px, alphas*ps)))
@@ -133,10 +138,15 @@ def torchlinesearch(x, z, s, px, pz, ps, mu):
 		alphas*=0.5
 		iters+=1
 
-	set_trace()
-	if not flag:
+	if not flag and iters==num_iters:
 		mu *= 2
-	return (x,z,s, flag)
+		flag = True
+		nu *= 0.5
+		return (x,z,s, flag, mu)
+
+	mu *= 0.5
+	nu *= 2
+	return (x,z,s, flag, mu)
 
 def getSMW(A, v):
 
@@ -176,9 +186,10 @@ def prettyprint(delta, mu, func_val, iterate, iteration):
 		func_val: Value of the rosenbrock function at the current point
 		iteration: Iteration Number
 	'''
+	global nu
 	print('Iteration:'+str(iteration+1)+'\t functional value:'+str(func_val.data.numpy()))
 	print('Iterate:'+str(iterate.data.numpy())+'\t Iterate radius:' +str(torch.norm(iterate).data.numpy()))
-	print('z:'+str(z.data.numpy())+' mu:'+str(mu)+'\t s:'+str(s[0].data.numpy())+'\n')
+	print('z:'+str(z.data.numpy())+' mu:'+str(mu)+'\t s:'+str(s[0].data.numpy())+'\t nu: '+str(nu)+'\n')
 
 
 
@@ -194,17 +205,17 @@ if __name__ == '__main__':
 	delta = args.delta
 	max_iters = args.max_iters
 	mu = args.mu
+	nu = 1.
 	num_iters = 20
 	iterates = []
-	sol = torch.tensor([2.,2.], requires_grad=True)
+	sol = torch.tensor([-1.,1.], requires_grad=True)
 	s = torch.tensor([10.])
 	z = torch.tensor([1e6])
 	iterates.append(sol.clone().detach().data.numpy())	
 	for i in range(max_iters):
 		px, ps, pz = torchsolution(sol,z, s)
-		# mu*=0.1
 		func_val = torchrosenbrock(sol).data
-		sol, z, s, flag = torchlinesearch(sol, z, s, px, pz, ps, mu)
+		sol, z, s, flag, mu = torchlinesearch(sol, z, s, px, pz, ps, mu)
 		iterates.append(sol.clone().detach().data.numpy())
 		if flag:
 			with torch.no_grad():
