@@ -18,13 +18,14 @@ parser = argparse.ArgumentParser()
 torchrosenbrock = lambda x: 100*(x[1] - x[0]**2)**2 + (1 - x[0])**2
 
 # Define the constraint
-torchconstraint =  lambda x,s: (torch.norm(x[:2]) - s)
+torchconstraint =  lambda x, s: (10. - torch.norm(x[:2]) - s)
 
 # Define log barrier
 torchbarrier = lambda s: torch.log(s)
 
 #Define the optimization problem
-torchfunc = lambda x,s,z: torchrosenbrock(x) - z*torchconstraint(x, s) - mu*torchbarrier(s)
+torchfunc = lambda x, s, z: torchrosenbrock(x) - z*torchconstraint(x, s) - mu*torchbarrier(s)
+
 
 def getHessianPD(x,z,s, A_I, invSigma):
 	'''
@@ -52,7 +53,7 @@ def getGradient(f, c, s, x, z, A_I, invSigma):
 	Computes the Hessian of torchfunc using the primal-dual system
 	Inputs:
 		f: objective function
-		c: constraint
+		c: constraint  (\norm{x} < 100)
 		
 	
 	Outputs:
@@ -93,6 +94,46 @@ def torchsolution(x,z,s):
 
 	return px, ps, pz
 
+def torchlinesearch(x, z, s, px, pz, ps, mu):
+	'''
+	Line search using the formula:
+	\phi_v (x + \alpha_s p_x , s + \alpha_s p_s) \leq \phi(x_k, s_k) + \eta \alpha_s D \phi_v(x_k, s_k; p_w)
+
+	Input: 
+		x: input to torchrosenbrock function
+		z: Lagrange multiplier to constraint
+		s: radius
+
+	Ouput:
+		flag: updated or not
+		x, z, s
+	'''
+	alphas = 1.
+	flag = False
+	
+	# Define the merit function
+	nu = 1
+	torchphi = lambda x: torchrosenbrock(x) - mu*torch.log(s) + nu*torch.norm(torchconstraint(x, s))
+	eta = 0.5
+	iters = 0
+	# print('--------------------Line-search----------------')
+	xs = torch.cat([x, s])
+	p = torch.cat([px, ps])
+	while not flag and iters<=num_iters:
+		
+		D = torch.autograd.grad(torchphi(xs), xs, create_graph=False)[0].dot(alphas*p)
+		set_trace()
+		if torchphi(xs + alphas*p) <= torchphi(xs) + eta*D*alphas*torchphi(xs):
+			flag = True
+			continue
+		# print('phi(x + alphax*px,s + alphas*ps):'+str(torchphi(alphas*px, alphas*ps)))
+		# print('phi(x,s):'+str(torchphi(torch.zeros(px.shape), torch.zeros(ps.shape))))
+		# print('-----------------------------------------------------------------')
+		alphas*=0.5
+		iters+=1
+
+	return (x,z,s, flag)
+
 def getSMW(A, v):
 
 	'''
@@ -111,7 +152,7 @@ def getSMW(A, v):
 	# Also the dot product between InvMat and v
 
 
-	InvMat = tl.inv(matrix)
+	InvMat = tl.inv(A)
 	InvMatdotv = InvMat.dot(v)
 	
 	# Now let's apply the Sherman-Morrison-Woodbury, which is given by the latex expression above
@@ -131,7 +172,7 @@ def prettyprint(delta, mu, func_val, iterate, iteration):
 		func_val: Value of the rosenbrock function at the current point
 		iteration: Iteration Number
 	'''
-	print('Iteration:'+str(iteration)+'\t functional value:'+str(func_val.data.numpy()))
+	print('Iteration:'+str(iteration+1)+'\t functional value:'+str(func_val.data.numpy()))
 	print('Iterate:'+str(iterate.data.numpy())+'\t Iterate radius:' +str(torch.norm(iterate).data.numpy()))
 	print('z:'+str(z.data.numpy())+' mu:'+str(mu)+'\t s:'+str(s[0].data.numpy())+'\n')
 
@@ -141,7 +182,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--delta', type=float, default=2.0)
 	parser.add_argument('--mu', type=float, default=1.0)
-	parser.add_argument('--max-iters', type=int, default=20)
+	parser.add_argument('--max-iters', type=int, default=30)
 	parser.add_argument('--line-search-iters', type=int, default=10)
 	parser.add_argument('--save', type=bool, default=False)
 	parser.add_argument('--location', type=str, default='./rosenbrockresults/raw/path.pkl')
@@ -149,22 +190,25 @@ if __name__ == '__main__':
 	delta = args.delta
 	max_iters = args.max_iters
 	mu = args.mu
+	num_iters = 20
 	iterates = []
-	sol = torch.tensor([-15.,15.], requires_grad=True)
-	s = torch.tensor([100.])
+	sol = torch.tensor([2.,2.], requires_grad=True)
+	iterates.append(sol.clone().detach().numpy())
+	s = torch.tensor([10.])
 	z = torch.tensor([1e6])
 	iterates.append(sol.data.numpy())	
 	for i in range(max_iters):
 		px, ps, pz = torchsolution(sol,z, s)
-		with torch.no_grad():
-			sol += px.data
-			s += ps.data
-			z += pz.data
-
-
 		iterates.append(sol.clone().detach().numpy())
-		mu*=0.1
+		# mu*=0.1
 		func_val = torchrosenbrock(sol).data
+		sol, z, s, flag = torchlinesearch(sol, z, s, px, pz, ps, mu)
+		if flag:
+			with torch.no_grad():
+				sol += px.data
+				s += ps.data
+				z += pz.data
+
 		prettyprint(delta, mu, func_val, sol, i)
 
 
