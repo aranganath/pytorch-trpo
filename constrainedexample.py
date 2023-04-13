@@ -122,8 +122,9 @@ def torchlinesearch(x, z, s, px, pz, ps, mu):
 	while not flag and iters<=num_iters:
 		
 		D = torch.autograd.grad(torchphi(xs), xs, create_graph=False)[0].dot(alphas*p)
-		set_trace()
+		
 		if torchphi(xs + alphas*p) <= torchphi(xs) + eta*D*alphas*torchphi(xs):
+			set_trace()
 			flag = True
 			continue
 		# print('phi(x + alphax*px,s + alphas*ps):'+str(torchphi(alphas*px, alphas*ps)))
@@ -132,6 +133,9 @@ def torchlinesearch(x, z, s, px, pz, ps, mu):
 		alphas*=0.5
 		iters+=1
 
+	set_trace()
+	if not flag:
+		mu *= 2
 	return (x,z,s, flag)
 
 def getSMW(A, v):
@@ -193,16 +197,15 @@ if __name__ == '__main__':
 	num_iters = 20
 	iterates = []
 	sol = torch.tensor([2.,2.], requires_grad=True)
-	iterates.append(sol.clone().detach().numpy())
 	s = torch.tensor([10.])
 	z = torch.tensor([1e6])
-	iterates.append(sol.data.numpy())	
+	iterates.append(sol.clone().detach().data.numpy())	
 	for i in range(max_iters):
 		px, ps, pz = torchsolution(sol,z, s)
-		iterates.append(sol.clone().detach().numpy())
 		# mu*=0.1
 		func_val = torchrosenbrock(sol).data
 		sol, z, s, flag = torchlinesearch(sol, z, s, px, pz, ps, mu)
+		iterates.append(sol.clone().detach().data.numpy())
 		if flag:
 			with torch.no_grad():
 				sol += px.data
